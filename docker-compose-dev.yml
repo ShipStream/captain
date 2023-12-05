@@ -1,0 +1,127 @@
+version: '3.7'
+services:
+  captain-1:
+    build:
+      context: .
+      target: develop-stage
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - DNS_PROVIDER=technitium
+      - MEMBER_URLS=${MEMBER_URLS}
+      - SELF_URL=ws://10.5.0.11:7400
+      - CAPTAIN_SECRET_KEY=${CAPTAIN_SECRET_KEY}
+    volumes:
+      - .:/app
+      - ./__simulation__/data:/data
+      - /app/dist
+      - /app/.pnpm-store
+      - /app/node_modules
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.11
+    entrypoint: ['sh', '-c']
+    # command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+  captain-2:
+    extends: captain-1
+    environment:
+      - SELF_URL=ws://10.5.0.12:7400
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.12
+  captain-3:
+    extends: captain-1
+    environment:
+      - SELF_URL=ws://10.5.0.13:7400
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.13
+
+  dummy-web-app:
+    build:
+      context: ./__simulation__/web-app
+      target: develop-stage
+    environment:
+      - NODE_ENV=${NODE_ENV}
+    volumes:
+      - ./__simulation__/web-app:/app
+      - /app/dist
+      - /app/.pnpm-store
+      - /app/node_modules
+    entrypoint: ['sh', '-c']
+    command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+  crm-app-1:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.21
+  crm-app-2:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.22
+  crm-app-3:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.23
+  ecommerce-app-1:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.31
+  ecommerce-app-2:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.32
+  ecommerce-app-3:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.33
+  ecommerce-app-4:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.34
+  helpdesk-app-1:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.41
+  helpdesk-app-2:
+    extends: dummy-web-app
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.42
+
+  # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
+  dns-server:
+    container_name: dns-server
+    hostname: dns-server
+    image: technitium/dns-server:latest
+    ports:
+      - '5380:5380/tcp' #DNS web console (HTTP)
+      - '53:53/udp' #DNS service
+      - '53:53/tcp' #DNS service
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.2
+    environment:
+      - DNS_SERVER_DOMAIN=dns-server #The primary domain name used by this DNS Server to identify itself.
+      - DNS_SERVER_ADMIN_PASSWORD=admin #DNS web console admin user password.
+      - DNS_SERVER_FORWARDERS=8.8.8.8, 8.8.4.4 #Comma separated list of forwarder addresses.
+    # volumes:
+    #   - config:/etc/dns
+    restart: unless-stopped
+    sysctls:
+      - net.ipv4.ip_local_port_range=1024 65000
+
+networks:
+  custom-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/16
+          gateway: 10.5.0.1

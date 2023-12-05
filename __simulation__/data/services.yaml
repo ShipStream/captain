@@ -1,0 +1,90 @@
+version: '1.0'
+services:
+  # - name: captain
+  #   description: I am the captain now!
+  #   tags:
+  #     - platform
+  #   zone_record: captain.ops
+  #   addresses:
+  #     - 10.5.0.11
+  #     - 10.5.0.12
+  #     - 10.5.0.13
+  #   multi: true
+  #   check:
+  #     protocol: http
+  #     host: captain.ops
+  #     port: 80
+  #     path: /health
+  #   unhealthy_interval: 120
+  #   healthy_interval: 5
+  #   fall: 3
+  #   rise: 3
+  #   connect_timeout: 3
+  #   read_timeout: 3
+  #   cool_down: 300
+  - name: crm
+    description: I am the crm app!
+    tags:
+      - platform
+    zone_record: crm.ops
+    addresses:
+      - 10.5.0.21
+      #- 10.5.0.22
+      #- 10.5.0.23
+    multi: true
+    check:
+      protocol: http
+      host: crm.ops
+      port: 80
+      path: /health
+    unhealthy_interval: 120
+    healthy_interval: 5
+    fall: 3
+    rise: 3
+    connect_timeout: 3
+    read_timeout: 3
+    cool_down: 300
+  # - name: ecommerce
+  #   description: ecommerce app
+  #   tags:
+  #     - platform
+  #   zone_record: ecommerce.ops
+  #   addresses:
+  #     - 10.5.0.31
+  #     - 10.5.0.32
+  #     - 10.5.0.33
+  #     - 10.5.0.34
+  #   multi: true
+  #   check:
+  #     protocol: http
+  #     host: ecommerce.ops
+  #     port: 80
+  #     path: /health
+  #   unhealthy_interval: 120
+  #   healthy_interval: 5
+  #   fall: 3
+  #   rise: 3
+  #   connect_timeout: 3
+  #   read_timeout: 3
+  #   cool_down: 300
+  # - name: helpdesk
+  #   description: I am the helpdesk app!
+  #   tags:
+  #     - platform
+  #   zone_record: helpdesk.ops
+  #   addresses:
+  #     - 10.5.0.41
+  #     - 10.5.0.42
+  #   multi: true
+  #   check:
+  #     protocol: http
+  #     host: helpdesk.ops
+  #     port: 80
+  #     path: /health
+  #   unhealthy_interval: 120
+  #   healthy_interval: 5
+  #   fall: 3
+  #   rise: 3
+  #   connect_timeout: 3
+  #   read_timeout: 3
+  #   cool_down: 300

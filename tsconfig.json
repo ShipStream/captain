@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+
+    // base options
+    /* commonjs/esmodule compatibility */
+    "esModuleInterop": true,
+    /* skip lib typecheck for performance */
+    "skipLibCheck": true,
+    /* allow/resolve .js */
+    "allowJs": true,
+    /* allow/resolve .json */
+    "resolveJsonModule": true,
+    // "verbatimModuleSyntax": true,
+    /* every file is a module */
+    "moduleDetection": "force",
+
+    // type checking options
+    /* enable strict type checking */
+    "strict": true,
+    /* prevent accessing 'undefined' variable */
+    "noUncheckedIndexedAccess": true,
+
+    // transpiling options
+    "target": "es2022",
+    "lib": ["es2022"],    
+    "moduleResolution": "NodeNext",
+    "module": "NodeNext",
+    "outDir": "dist",
+ 
+    // debug options
+    "sourceMap": true,
+  },
+  "exclude": [
+    "./node_modules/**/*",
+    "./dist",
+    "./__simulation__/**/*",
+    "./__tests__/**/*",
+    "etsc.config.js"
+  ]
+}
