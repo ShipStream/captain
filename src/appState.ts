@@ -1,13 +1,13 @@
-import appConfig from "./appConfig.js";
-import { typeWebServiceConf } from "./web-service/webServiceHelper.js";
-import { WebServiceManager } from "./web-service/webServiceManager.js";
+// import {logger} from './coreUtils.js'
+import appConfig from './appConfig.js'
+import {typeWebServiceConf} from './web-service/webServiceHelper.js'
+import {WebServiceManager} from './web-service/webServiceManager.js'
 
 // 'State' (Hash) of all web services.
 // Using zone record as unique key.
 export const webServices: {
-  [key: string]: WebServiceManager;
+  [key: string]: WebServiceManager
 } = {}
-
 
 /**
  * Initiate a manager ('WebServiceManager') for each 'web service' to be managed by the 'captain'.
@@ -17,20 +17,27 @@ export const webServices: {
  */
 export function registerWebService(serviceConf: typeWebServiceConf) {
   // Using zone record as unique key
-  webServices[serviceConf.zone_record] = new WebServiceManager(serviceConf)
+  const webService = new WebServiceManager(serviceConf)
+  webServices[webService.serviceKey] = webService
 }
 
-// Output 'state' for debugging
+// // Output 'state' for debugging
 // setInterval(() => {
-//   console.log('appState:webServices', JSON.stringify(Object.keys(webServices).map((eachKey) => {
-//     return webServices[eachKey]?.serviceState
-//   }), undefined, 2))
-//   console.log('appState:leader', {
+//   logger.info(
+//     'appState:webServices',
+//     JSON.stringify(
+//       Object.keys(webServices).map((eachKey) => {
+//         return webServices[eachKey]?.serviceState
+//       }),
+//       undefined,
+//       2
+//     )
+//   )
+//   logger.info('appState:leader', {
 //     'getLeaderUrl()': getLeaderUrl(),
-//     'isLeader()': isLeader()
+//     'isLeader()': isLeader(),
 //   })
 // }, 5000)
-
 
 // Maintain 'state' about leader of the 'captains'
 let leaderURL: string

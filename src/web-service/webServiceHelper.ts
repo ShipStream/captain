@@ -1,64 +1,97 @@
-import fs from 'fs/promises';
-import { existsSync } from 'fs';
-import http from 'http';
+/* eslint-disable no-unused-vars */
+/* eslint-disable camelcase */
+import fs from 'fs/promises'
+import http from 'http'
 import YAML from 'yaml'
-import { WebServiceManager } from './webServiceManager.js';
-import { registerWebService, webServices } from '../appState.js';
-import { broadcastActiveAddresses } from '../socket/captainSocketServerManager.js';
-import appConfig from '../appConfig.js';
-import { dnsManager } from '../dns/dnsManager.js';
+import {WebServiceManager} from './webServiceManager.js'
+import {isLeader, registerWebService} from '../appState.js'
+import appConfig from '../appConfig.js'
+import {logger, raceConditionHandler} from './../coreUtils.js'
+
+export const enum HEALTH_CHECK_REQUEST_VERIFY_STATE {
+  PASSING = 'passing',
+  FAILING = 'failing',
+  NONE = 'none',
+}
+
+export const enum RESET_POLLING_REQUEST_POLLING_TYPE {
+  HEALTHY = 'healthy',
+  UN_HEALTHY = 'unhealthy',
+}
+
+export const enum WEB_SERVICE_STATUS {
+  UN_KNOWN = 'unknown',
+  HEALTHY = 'healthy',
+  UN_HEALTHY = 'unhealthy',
+}
+
+export const enum FAILOVER_PROGRESS {
+  FAILOVER_STARTED = 'failover_started',
+  HEALTHY_TARGET_NOT_AVAILABLE = 'failover_target_not_available',
+  HEALTHY_TARGET_FOUND = 'failover_target_found',
+  DNS_UPDATED = 'failover_dns_updated',
+  FAILOVER_COMPLETED = 'failover_completed',
+  FAILOVER_FAILED = 'failover_failed',
+}
 
 export type typeWebServiceConf = {
-  name: string,
-  description: string,
-  tags: Array<string>,
-  zone_record: string,
-  addresses: Array<string>,
-  multi: boolean,
+  name: string
+  description: string
+  tags: Array<string>
+  zone_record: string
+  addresses: Array<string>
+  multi: boolean
   check: {
-    protocol: string,
-    host: string,
-    port: number,
+    protocol: string
+    host: string
+    port: number
     path: string
-  },
-  unhealthy_interval: number,
-  healthy_interval: number,
-  fall: number,
-  rise: number,
-  connect_timeout: number,
-  read_timeout: number,
+  }
+  unhealthy_interval: number
+  healthy_interval: number
+  fall: number
+  rise: number
+  connect_timeout: number
+  read_timeout: number
   cool_down: number
 }
 
-type ipPassFailState = {
-  failing: number,
-  passing: number,
+export type ipPassFailState = {
+  failing: number
+  passing: number
   last_update: Date | null
 }
 
 export type typeWebServiceState = {
-  service: typeWebServiceConf,
-  is_remote: boolean,
-  is_orphan: boolean,
-  mates: Array<any> | null,
-  checks: Record<string, Record<string, ipPassFailState>>,
-  active: Array<string>,
-  status: "unhealthy" | "healthy",
-  failover: null,
-  failover_started: Date | null,
-  failover_finished: Date | null
+  // service: typeWebServiceConf,
+  is_remote: boolean
+  is_orphan: boolean
+  mates: Array<any> | null
+  checks: {
+    [trackedByCaptainUrl: string]: {
+      [ipAddress: string]: ipPassFailState
+    }
+  }
+  active: Array<string>
+  status?: WEB_SERVICE_STATUS
+  failover?: null
+  failover_progress?: FAILOVER_PROGRESS | null
+  failover_progress_date_time?: Date | null
+  failover_progress_history?: {failover_progress: FAILOVER_PROGRESS; failover_progress_date_time: Date}[] | null
+  failover_started?: Date | null
+  failover_finished?: Date | null
 }
 
 /**
  * Discover 'static' services to be directly managed by the 'captain' by reading the 'services.yaml'.
  * Called on 'startup' and also using 'SIGHUP' signal
- * 
+ *
  */
 export async function processWebServiceFileYAML() {
-  console.log('processServiceFileYAML');
-  const servicesFile = await fs.readFile("/data/services.yaml", 'utf8')
-  const loadedYaml = YAML.parse(servicesFile);
-  // console.log('processServiceFileYAML:2', {
+  logger.info('processServiceFileYAML')
+  const servicesFile = await fs.readFile('/data/services.yaml', 'utf8')
+  const loadedYaml = YAML.parse(servicesFile)
+  // logger.info('processServiceFileYAML:2', {
   //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
   // });
   for (const service of loadedYaml?.services) {
@@ -76,14 +109,16 @@ export async function processWebServiceFileYAML() {
 export function readResponseBodyFromHealthCheck(res: http.IncomingMessage): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     try {
-      const chunks: any[] = [];
+      const chunks: any[] = []
       res.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
+        logger.debug('readResponseBodyFromHealthCheck:data')
+        chunks.push(chunk)
+      })
       res.on('end', () => {
-        const body = Buffer.concat(chunks);
+        logger.debug('readResponseBodyFromHealthCheck:end')
+        const body = Buffer.concat(chunks)
         resolve(body.toString('utf-8'))
-      });
+      })
     } catch (e) {
       reject(e)
     }
@@ -91,116 +126,251 @@ export function readResponseBodyFromHealthCheck(res: http.IncomingMessage): Prom
 }
 
 /**
- * Check with peer's state and decide if the ip needs to be added to active address of the service.
+ * Check with peer's state and decide if the ip needs to be added to 'active_addresses' of the service.
  * Need to handle 'multi' too.
  * Called only by 'leader'
  */
-export function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServiceManager, ipAddress: string) {
-  console.log(webService.logID, 'checkCombinedPeerStateAndInitiateAddActiveIP')
-  const activeAddresses = webService.serviceState.active
-
-  // Ensure, it is not already an 'active' address
-  // Also ensure 'multi' active addresses ( ROUND ROBIN ) supported
-  if (!activeAddresses.includes(ipAddress) && webService.serviceState.service.multi) {
-    // For now 'every' captain must agree, may be changed later
-    const countRequiredForAggrement = appConfig.MEMBER_URLS.length
-    const actualAggrementCount = Object.keys(webService.serviceState.checks).filter((eachCaptainUrl: string) => {
-      const eachCheckData = webService.serviceState.checks[eachCaptainUrl]![ipAddress]!
-      // check 'rise' limit to ensure 'passing'
-      return eachCheckData.passing >= webService.rise
-    })
-    .length // count of captains that has 'passing'
-
-    // Enough captain's state agree on 'passing'
-    if (actualAggrementCount >= countRequiredForAggrement) {
-      webService.serviceState.active.push(ipAddress)
-      dnsManager.addZoneRecord(webService.serviceState.service.zone_record, ipAddress)
+export async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServiceManager, ipAddress: string) {
+  const logID = `${webService?.logID}: checkCombinedPeerStateAndInitiateAddActiveIP ip: ${ipAddress}`
+  let raceCondLock
+  try {
+    logger.info(logID)
+    // console.trace(new Date().toUTCString(), logID)
+    // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
+    raceCondLock = await raceConditionHandler.getLock(webService.logID)
+    if (!isLeader()) {
+      throw new Error('Only leader can alter active addresses')
     }
+    // Verify 'passing' aggreement with all 'peer' checks
+    if (verifyPassingAggreement(webService, ipAddress)) {
+      const activeAddresses = webService.serviceState.active || []
+      // ipAddress can be added to the system in the following three cases.
+      // a). Failover new target
+      // b). Last Failover failed
+      // c). multi=true ( round robin )
+      if (
+        webService.isFailOverInProgress() &&
+        webService.serviceState.failover_progress === FAILOVER_PROGRESS.HEALTHY_TARGET_NOT_AVAILABLE
+      ) {
+        // a). Failover is in progress (cooldown active).
+        // But No healthy ('passing') failover target was available at the time failover 'starting'.
+        // But now we have a suitable target (new found 'passing' ip).
+        logger.info(
+          logID,
+          'previousState: FAILOVER_PROGRESS:HEALTHY_TARGET_NOT_AVAILABLE',
+          'newState: We got new healthy ip now, doing failover'
+        )
+        await failOverAndUpdateProgress(webService, activeAddresses?.[0], ipAddress)
+      } else if (
+        !webService.isFailOverInProgress() &&
+        webService.serviceState.status === WEB_SERVICE_STATUS.UN_HEALTHY
+      ) {
+        // b). webService is 'unhealthy'. This happens when previous failover failed.
+        // But now we have chance to do successful failover as we have a healthy ipaddress
+        // Initiate the whole failover process
+        logger.info(logID, 'WEB_SERVICE_STATUS.UN_HEALTHY')
+        webService.beginFailOverProcess(webService.serviceState.active[0]!)
+        await failOverAndUpdateProgress(webService, webService.serviceState.active?.[0], ipAddress)
+      } else {
+        // need to be added only if it's not already in 'active_address'es
+        if (!activeAddresses.includes(ipAddress)) {
+          if (webService.serviceConf.multi) {
+            // c). multi=true ( ROUND ROBIN ). Any 'passing' ip can be added into the system in this case
+            logger.info(logID, 'multi')
+            const newActiveAddresses = []
+            newActiveAddresses.push(...webService.serviceState.active)
+            newActiveAddresses.push(ipAddress)
+            await webService.handleActiveAddressChange(newActiveAddresses)
+          } else {
+            logger.info(logID, 'Ignore. Neither "multi" nor "unhealthy"')
+          }
+        } else {
+          logger.info(logID, `Ignore. Already part of active addresses: ${activeAddresses}`)
+        }
+      }
+    }
+  } catch (e: any) {
+    logger.error(new Error(`${logID}: Details: ${e?.message}`, {cause: e}))
+  } finally {
+    raceConditionHandler.releaseLock(raceCondLock)
   }
 }
 
 /**
- * Check with peer's state and decide if the ip needs to be removed from active address of the service.
+ * Check with peer's state and decide if the ip needs to be removed from 'active_addresses' of the service.
  * Need to handle 'failover' too.
  * Called only by 'leader'
  */
-export function checkCombinedPeerStateAndInitiateRemoveActiveIP(webService: WebServiceManager, ipAddress: string) {
-  console.log(webService.logID, 'checkCombinedPeerStateAndInitiateRemoveActiveIP')
-  const activeAddresses = webService.serviceState.active
-  // Ensure, it is in 'active' address list
-  if (activeAddresses.includes(ipAddress)) {
-    // For now 'every' captain must agree, may be changed later
-    const countRequiredForAggrement = appConfig.MEMBER_URLS.length
-    const actualAggrementCount = Object.keys(webService.serviceState.checks).filter((eachCaptainUrl: string) => {
-      const eachCheckData = webService.serviceState.checks[eachCaptainUrl]![ipAddress]!
-      // check 'fall' limit to ensure 'failing'
-      return eachCheckData.failing >= webService.fall
-    })
-    .length // count of captains that has 'failing'
-
-    // Enough captain's state agree on 'failing'
-    if (actualAggrementCount >= countRequiredForAggrement) {
-      const failOverIPAddress = findFailOverTarget(webService)
-      failOver(webService, ipAddress, failOverIPAddress)
+export async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
+  webService: WebServiceManager,
+  ipAddress: string
+) {
+  const logID = `${webService?.logID}: checkCombinedPeerStateAndInitiateRemoveActiveIP ip: ${ipAddress}`
+  let raceCondLock
+  try {
+    logger.info(logID)
+    // console.trace(new Date().toUTCString(), logID)
+    // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
+    raceCondLock = await raceConditionHandler.getLock(webService.logID)
+    if (!isLeader()) {
+      throw new Error('Only leader can alter active addresses')
     }
+    // Verify 'failing' aggreement with all 'peer' checks
+    if (verifyFailingAggreement(webService, ipAddress)) {
+      // When failover is in progress ( cool down ), ignore request to remove any ip and ignore potentially processing another failover
+      // eg: the new failed over target itself could go down but wait until failover cooldown before making decision
+      if (webService.isFailOverInProgress()) {
+        logger.warn(logID, 'Ignore. Since FailOverInProgress')
+        return
+      }
+      const activeAddresses = webService.serviceState.active || []
+      logger.info(logID, 'stage:1', activeAddresses)
+      // Ensure, it is in 'active' address list ( otherwise removing not needed )
+      if (activeAddresses.includes(ipAddress)) {
+        const remainingActiveAddresses = activeAddresses.filter((eachAddress) => {
+          return eachAddress !== ipAddress
+        })
+        logger.info(logID, 'stage:2', remainingActiveAddresses)
+        if (remainingActiveAddresses?.length && remainingActiveAddresses?.length >= 1) {
+          // Since we have 'remaining' active addresses, just-remove-failing-one, FAILOVER NOT NEEDED
+          // multi=true case
+          logger.info(logID, 'stage:3')
+          await webService.handleActiveAddressChange(remainingActiveAddresses)
+        } else {
+          // It is the only active address. FAILOVER NEEDED
+          // Generally multi=false ( OR multi=true with only one active address )
+          // In both the cases, we can try if failover target is available
+          logger.info(logID, 'stage:4')
+          if (
+            webService.serviceState.failover_progress === FAILOVER_PROGRESS.FAILOVER_FAILED &&
+            !webService.isHealthy()
+          ) {
+            // The last failover 'failed', service marked 'unhealthy' and also 'notified'
+            // So don't trigger another failover and leading to duplicate 'notification'
+            // Let the other method 'checkCombinedPeerStateAndInitiateAddActiveIP', look for a healthy ip,
+            // and trigger failover
+            logger.info(logID, 'stage:5')
+            logger.info(
+              logID,
+              'FAILOVER_SKIPPED',
+              '\n',
+              'Reason: ',
+              '\n',
+              "The last failover 'failed', service marked 'unhealthy' and also 'notified'.",
+              '\n',
+              "So don't trigger another failover and leading to duplicate 'notification'.",
+              '\n',
+              "Let the other method 'checkCombinedPeerStateAndInitiateAddActiveIP', look for a healthy replacement ip, and trigger failover"
+            )
+          } else {
+            logger.info(logID, 'stage:6')
+            webService.beginFailOverProcess(ipAddress)
+            const failOverIPAddress = findFailOverTargets(webService)?.[0]
+            if (failOverIPAddress) {
+              await failOverAndUpdateProgress(webService, ipAddress, failOverIPAddress)
+              logger.info(logID, 'stage:5')
+            } else {
+              webService.updateFailOverProgress(FAILOVER_PROGRESS.HEALTHY_TARGET_NOT_AVAILABLE)
+              logger.info(logID, 'stage:6')
+            }
+          }
+        }
+      } else {
+        logger.info(logID, 'stage:7')
+      }
+    }
+  } catch (e: any) {
+    logger.error(new Error(`${logID}: Details: ${e?.message}`, {cause: e}))
+  } finally {
+    raceConditionHandler.releaseLock(raceCondLock)
+  }
+}
+
+/**
+ * Verify 'checks' data of all the 'captains' to agree on 'passing'
+ */
+export function verifyPassingAggreement(webService: WebServiceManager, ipAddress: string) {
+  const logID = `${webService.logID} verifyPassingAggreement: ${ipAddress}`
+  const checksDataForGivenIP = webService.getChecksDataForGivenIP(ipAddress)
+  logger.debug(logID, checksDataForGivenIP)
+
+  // For now 'every' captain must agree, may be changed later
+  const countRequiredForAggrement = appConfig.MEMBER_URLS.length
+  const actualAggrementCount = Object.keys(checksDataForGivenIP).filter((eachCaptainUrl: string) => {
+    return checksDataForGivenIP[eachCaptainUrl]!.passing >= webService.rise
+  }).length // count of captains that has 'passing'
+
+  // Enough captain's state agree on 'passing'
+  if (actualAggrementCount >= countRequiredForAggrement) {
+    logger.info(logID, true)
+    return true
+  } else {
+    logger.info(logID, false)
+    return false
+  }
+}
+
+/**
+ * Verify 'checks' data of all the 'captains' to agree on 'failing'
+ */
+export function verifyFailingAggreement(webService: WebServiceManager, ipAddress: string) {
+  const checksDataForGivenIP = webService.getChecksDataForGivenIP(ipAddress)
+  logger.debug(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, checksDataForGivenIP)
+
+  // For now 'every' captain must agree, may be changed later
+  const countRequiredForAggrement = appConfig.MEMBER_URLS.length
+  const actualAggrementCount = Object.keys(checksDataForGivenIP).filter((eachCaptainUrl: string) => {
+    // check 'fall' limit to ensure 'failing'
+    return checksDataForGivenIP[eachCaptainUrl]!.failing >= webService.fall
+  }).length // count of captains that has 'failing'
+
+  // Enough captain's state agree on 'failing'
+  if (actualAggrementCount >= countRequiredForAggrement) {
+    logger.info(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, true)
+    return true
+  } else {
+    logger.info(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, false)
+    return false
   }
 }
 
 /**
  * Qualify the available addresses and find the target for 'failover' usings 'checks' data
  */
-function findFailOverTarget(webService: WebServiceManager): string {
-  console.log(webService.logID, 'findFailOverTarget')
-  // For now 'every' captain must agree, may be changed later
-  const countRequiredForAggrement = appConfig.MEMBER_URLS.length
-  const qualifyingAddresses = webService.serviceState.service.addresses.filter((eachIpAddress) => {
-    const actualAggrementCount = Object.keys(webService.serviceState.checks).filter((eachCaptainUrl: string) => {
-      const eachCheckData = webService.serviceState.checks[eachCaptainUrl]![eachIpAddress]!
-      // check 'rise' limit to ensure 'passing'
-      return eachCheckData.passing >= webService.rise
-    })
-    .length // count of captains that has 'passing'
-    return actualAggrementCount >= countRequiredForAggrement
+function findFailOverTargets(webService: WebServiceManager): string[] | undefined {
+  logger.info(webService.logID, 'findFailOverTarget', webService.serviceState.checks)
+  const qualifyingAddresses = webService.serviceConf.addresses.filter((eachIpAddress) => {
+    // verify passing with peers using 'checks' data
+    return verifyPassingAggreement(webService, eachIpAddress)
   })
   if (qualifyingAddresses?.[0]) {
-    return qualifyingAddresses[0]
+    // atleast there is one
+    return qualifyingAddresses
   } else {
-    // TODO
-    throw new Error('Unable to find failover target')
+    return undefined
   }
 }
 
 /**
- * Arrange for failover
+ * Arrange for failover by replacing one ip with other.
+ * Update failver progress.
  */
-function failOver(webService: WebServiceManager, oldIpAddress: string, newIpAddress: string) {
-  // add new ip address
-  webService.serviceState.active.push(newIpAddress)
-  // remove old ip address
-  webService.serviceState.active = webService.serviceState.active?.filter((eachAddress) => {
-    return eachAddress !== oldIpAddress
-  })
-  dnsManager.removeZoneRecord(webService.serviceState.service.zone_record, oldIpAddress)
-  dnsManager.addZoneRecord(webService.serviceState.service.zone_record, newIpAddress)
-}
-
-/**
- * Set initial active address(s) on startup. Called only by 'leader'
- *
- * @export
- * @param {WebServiceManager} webService
- */
-export function setInitialActiveAddressesForWebService(webService: WebServiceManager) {
-  if (webService.serviceState.service.multi) {
-    // multiple active addresses
-    // add all available addresses to 'active' list
-    webService.serviceState.active = [...webService.serviceState.service.addresses]
-    dnsManager.addZoneRecordMulti(webService.serviceState.service.zone_record, webService.serviceState.active)
-  } else {
-    // single active address
-    // add 'first' among the available addresses to 'active' list
-    webService.serviceState.active = [webService.serviceState.service.addresses[0]!]
-    dnsManager.addZoneRecord(webService.serviceState.service.zone_record, webService.serviceState.active[0]!)
-  }
-  broadcastActiveAddresses(webService)
+async function failOverAndUpdateProgress(
+  webService: WebServiceManager,
+  oldIpAddress: string | undefined,
+  newIpAddress: string
+) {
+  webService.updateFailOverProgress(FAILOVER_PROGRESS.HEALTHY_TARGET_FOUND)
+  const newActiveAddresses = []
+  // Push, everything except old ip address.
+  // Normally this will be empty as failover done only when there is no other active addresses. Still trying to preserve any existing active addresses.
+  newActiveAddresses.push(
+    ...webService.serviceState.active?.filter((eachAddress) => {
+      return eachAddress !== oldIpAddress
+    })
+  )
+  // Add new ip address.
+  newActiveAddresses.push(newIpAddress)
+  await webService.handleActiveAddressChange(newActiveAddresses)
+  webService.updateFailOverProgress(FAILOVER_PROGRESS.DNS_UPDATED)
 }

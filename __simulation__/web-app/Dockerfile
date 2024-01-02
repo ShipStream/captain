@@ -1,9 +1,9 @@
 #### develop stage
 FROM node:20-buster-slim as develop-stage
 # network and process debugging tools
-RUN apt-get update && apt install -y iproute2 iputils-ping procps
+RUN apt-get update && apt install -y iproute2 iputils-ping procps dnsutils curl
 WORKDIR /app
-RUN npm install -g pnpm nodemon
+RUN npm install -g pnpm@8.11.0 nodemon
 ENV NODE_ENV=development
 
 #### production stage

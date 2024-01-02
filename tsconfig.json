@@ -29,6 +29,8 @@
  
     // debug options
     "sourceMap": true,
+
+    "baseUrl": "src",
   },
   "exclude": [
     "./node_modules/**/*",
