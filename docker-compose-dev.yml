@@ -118,6 +118,7 @@ services:
 
 networks:
   custom-network:
+    name: ${COMPOSE_PROJECT_NAME}-custom-network
     driver: bridge
     # disable ipv6 to simplify network setup
     enable_ipv6: false

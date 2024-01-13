@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import appConfig from './../appConfig.js'
 import {logger} from './../coreUtils.js'
-import {isLeader} from './../appState.js'
+import appState from './../appState.js'
 import {DnsManager} from './dnsManager.js'
 import {CustomError} from './../CustomError.js'
 
@@ -14,19 +14,22 @@ function isJson(jsonString: string) {
   return true
 }
 
+export const CLOUDFLARE_BASE_URL = `https://api.cloudflare.com/client/v4/zones`
+export const CLOUDFLARE_ZONE_RECORDS_PER_PAGE = 10
 /**
  * Wrapper over node 'fetch' customized for typical response from cloudflare
  */
-async function customFetch(url: NodeJS.fetch.RequestInfo, fetchParams?: RequestInit) {
-  const CLOUDFLARE_BASE_URL = `https://api.cloudflare.com/client/v4/zones/${appConfig.CLOUDFLARE_ZONE_ID}`
+async function customFetch(url: string, fetchParams?: RequestInit) {
+  const CLOUDFLARE_BASE_ZONE_URL = `${CLOUDFLARE_BASE_URL}/${appConfig.CLOUDFLARE_ZONE_ID}`
   const token = appConfig.CLOUDFLARE_TOKEN
-  const response = await fetch(`${CLOUDFLARE_BASE_URL}${url}`, {
+  const response = await fetch(`${CLOUDFLARE_BASE_ZONE_URL}${url}`, {
     ...fetchParams,
     headers: {
       ...fetchParams?.headers,
       Authorization: `Bearer ${token}`,
     },
   })
+  console.log('cloudflareDnsManager:customFetch', await response.clone().text())
   if (response.ok) {
     const jsonResponse: any = await response.json()
     if (jsonResponse.success === true) {
@@ -62,14 +65,13 @@ async function customFetch(url: NodeJS.fetch.RequestInfo, fetchParams?: RequestI
 }
 
 async function getAllPagesOfDnsRecords(filterCriteria: any) {
-  const PER_PAGE = 10
   let currentPage = 0
   const result = []
   let eachPageResult
   do {
     currentPage++
     const searchParams = new URLSearchParams({
-      per_page: `${PER_PAGE}`,
+      per_page: `${CLOUDFLARE_ZONE_RECORDS_PER_PAGE}`,
       page: currentPage,
       ...filterCriteria,
     }).toString()
@@ -88,16 +90,18 @@ async function getAllPagesOfDnsRecords(filterCriteria: any) {
  * Live dns query to get all resolved ip's for a given zone record
  */
 async function resolvedAddresses(zoneRecord: string): Promise<string[]> {
+  logger.info('resolvedAddresses:1', {zoneRecord})
   const resolvedAddressesResponse = await getAllPagesOfDnsRecords({
     name: zoneRecord,
     type: 'A',
   })
+  logger.info('resolvedAddresses:2', {resolvedAddressesResponse})
   const result = resolvedAddressesResponse
     ?.map((eachRecord: any) => {
       return eachRecord.content
     })
     .filter((eachIPAddress: string) => !!eachIPAddress)
-  logger.info('resolvedAddresses', {
+  logger.info('resolvedAddresses:3', {
     result,
   })
   return result
@@ -176,7 +180,7 @@ async function removeZoneRecordMulti(zoneRecord: string, ipAddresses: string[]):
  * Custom validation/setup, specific for each dns provider
  */
 async function validateDnsConf() {
-  if (isLeader()) {
+  if (appState.isLeader()) {
     // fetch zone details to test connection and auth
     const zoneDetails = await customFetch('', {
       method: 'get',

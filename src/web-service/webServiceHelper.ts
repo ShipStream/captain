@@ -4,9 +4,10 @@ import fs from 'fs/promises'
 import http from 'http'
 import YAML from 'yaml'
 import {WebServiceManager} from './webServiceManager.js'
-import {isLeader, registerWebService} from '../appState.js'
+import appState from '../appState.js'
 import appConfig from '../appConfig.js'
-import {logger, raceConditionHandler} from './../coreUtils.js'
+import {logger} from './../coreUtils.js'
+import { existsSync } from 'fs'
 
 export const enum HEALTH_CHECK_REQUEST_VERIFY_STATE {
   PASSING = 'passing',
@@ -14,7 +15,7 @@ export const enum HEALTH_CHECK_REQUEST_VERIFY_STATE {
   NONE = 'none',
 }
 
-export const enum RESET_POLLING_REQUEST_POLLING_TYPE {
+export const enum CHANGE_POLLING_FREQ_POLLING_TYPE {
   HEALTHY = 'healthy',
   UN_HEALTHY = 'unhealthy',
 }
@@ -87,15 +88,19 @@ export type typeWebServiceState = {
  * Called on 'startup' and also using 'SIGHUP' signal
  *
  */
-export async function processWebServiceFileYAML() {
+async function processWebServiceFileYAML() {
   logger.info('processServiceFileYAML')
-  const servicesFile = await fs.readFile('/data/services.yaml', 'utf8')
-  const loadedYaml = YAML.parse(servicesFile)
-  // logger.info('processServiceFileYAML:2', {
-  //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
-  // });
-  for (const service of loadedYaml?.services) {
-    registerWebService(service)
+  if (existsSync(appConfig.WEBSERVICE_YAML_LOCATION)) {
+    logger.info('processServiceFileYAML:1')
+    const servicesFile = await fs.readFile(appConfig.WEBSERVICE_YAML_LOCATION, 'utf8')
+    const loadedYaml = YAML.parse(servicesFile)
+    // logger.info('processServiceFileYAML:2', {
+    //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
+    // });
+    await appState.registerWebServices(loadedYaml?.services)
+  } else {
+    logger.info('processServiceFileYAML:2')
+    throw new Error(`WebService YAML file location invalid: ${appConfig.WEBSERVICE_YAML_LOCATION}`)
   }
 }
 
@@ -106,7 +111,7 @@ export async function processWebServiceFileYAML() {
  * @param {http.IncomingMessage} res
  * @return {*}  {Promise<string>}
  */
-export function readResponseBodyFromHealthCheck(res: http.IncomingMessage): Promise<string> {
+function readResponseBodyFromHealthCheck(res: http.IncomingMessage): Promise<string> {
   return new Promise<string>((resolve, reject) => {
     try {
       const chunks: any[] = []
@@ -130,15 +135,17 @@ export function readResponseBodyFromHealthCheck(res: http.IncomingMessage): Prom
  * Need to handle 'multi' too.
  * Called only by 'leader'
  */
-export async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServiceManager, ipAddress: string) {
+//handleAgreedPassingStateOfIP
+//verifyCombinedChecksAndHandlePassingIP
+async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServiceManager, ipAddress: string) {
   const logID = `${webService?.logID}: checkCombinedPeerStateAndInitiateAddActiveIP ip: ${ipAddress}`
   let raceCondLock
   try {
     logger.info(logID)
     // console.trace(new Date().toUTCString(), logID)
     // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
-    raceCondLock = await raceConditionHandler.getLock(webService.logID)
-    if (!isLeader()) {
+    raceCondLock = await appState.getRaceHandler().getLock(webService.logID)
+    if (!appState.isLeader()) {
       throw new Error('Only leader can alter active addresses')
     }
     // Verify 'passing' aggreement with all 'peer' checks
@@ -192,7 +199,7 @@ export async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: W
   } catch (e: any) {
     logger.error(new Error(`${logID}: Details: ${e?.message}`, {cause: e}))
   } finally {
-    raceConditionHandler.releaseLock(raceCondLock)
+    appState.getRaceHandler().releaseLock(raceCondLock)
   }
 }
 
@@ -201,7 +208,9 @@ export async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: W
  * Need to handle 'failover' too.
  * Called only by 'leader'
  */
-export async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
+//handleAgreedFailingStateOfIP
+//verifyCombinedChecksAndHandleFailingIP
+async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
   webService: WebServiceManager,
   ipAddress: string
 ) {
@@ -211,8 +220,8 @@ export async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
     logger.info(logID)
     // console.trace(new Date().toUTCString(), logID)
     // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
-    raceCondLock = await raceConditionHandler.getLock(webService.logID)
-    if (!isLeader()) {
+    raceCondLock = await appState.getRaceHandler().getLock(webService.logID)
+    if (!appState.isLeader()) {
       throw new Error('Only leader can alter active addresses')
     }
     // Verify 'failing' aggreement with all 'peer' checks
@@ -282,14 +291,14 @@ export async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
   } catch (e: any) {
     logger.error(new Error(`${logID}: Details: ${e?.message}`, {cause: e}))
   } finally {
-    raceConditionHandler.releaseLock(raceCondLock)
+    appState.getRaceHandler().releaseLock(raceCondLock)
   }
 }
 
 /**
  * Verify 'checks' data of all the 'captains' to agree on 'passing'
  */
-export function verifyPassingAggreement(webService: WebServiceManager, ipAddress: string) {
+function verifyPassingAggreement(webService: WebServiceManager, ipAddress: string) {
   const logID = `${webService.logID} verifyPassingAggreement: ${ipAddress}`
   const checksDataForGivenIP = webService.getChecksDataForGivenIP(ipAddress)
   logger.debug(logID, checksDataForGivenIP)
@@ -297,7 +306,12 @@ export function verifyPassingAggreement(webService: WebServiceManager, ipAddress
   // For now 'every' captain must agree, may be changed later
   const countRequiredForAggrement = appConfig.MEMBER_URLS.length
   const actualAggrementCount = Object.keys(checksDataForGivenIP).filter((eachCaptainUrl: string) => {
-    return checksDataForGivenIP[eachCaptainUrl]!.passing >= webService.rise
+    if (checksDataForGivenIP?.[eachCaptainUrl]?.passing) {
+      // check 'rise' limit to ensure 'passing'
+      return checksDataForGivenIP[eachCaptainUrl]!.passing >= webService.rise  
+    } else {
+      return false
+    }
   }).length // count of captains that has 'passing'
 
   // Enough captain's state agree on 'passing'
@@ -313,15 +327,19 @@ export function verifyPassingAggreement(webService: WebServiceManager, ipAddress
 /**
  * Verify 'checks' data of all the 'captains' to agree on 'failing'
  */
-export function verifyFailingAggreement(webService: WebServiceManager, ipAddress: string) {
+function verifyFailingAggreement(webService: WebServiceManager, ipAddress: string) {
   const checksDataForGivenIP = webService.getChecksDataForGivenIP(ipAddress)
   logger.debug(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, checksDataForGivenIP)
 
   // For now 'every' captain must agree, may be changed later
   const countRequiredForAggrement = appConfig.MEMBER_URLS.length
   const actualAggrementCount = Object.keys(checksDataForGivenIP).filter((eachCaptainUrl: string) => {
-    // check 'fall' limit to ensure 'failing'
-    return checksDataForGivenIP[eachCaptainUrl]!.failing >= webService.fall
+    if (checksDataForGivenIP?.[eachCaptainUrl]?.failing) {
+      // check 'fall' limit to ensure 'failing'
+      return checksDataForGivenIP[eachCaptainUrl]!.failing >= webService.fall  
+    } else {
+      return false
+    }
   }).length // count of captains that has 'failing'
 
   // Enough captain's state agree on 'failing'
@@ -374,3 +392,14 @@ async function failOverAndUpdateProgress(
   await webService.handleActiveAddressChange(newActiveAddresses)
   webService.updateFailOverProgress(FAILOVER_PROGRESS.DNS_UPDATED)
 }
+
+const webServiceHelper = {
+  processWebServiceFileYAML,
+  readResponseBodyFromHealthCheck,
+  checkCombinedPeerStateAndInitiateAddActiveIP,
+  checkCombinedPeerStateAndInitiateRemoveActiveIP,
+  verifyPassingAggreement,
+  verifyFailingAggreement
+}
+
+export default webServiceHelper

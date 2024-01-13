@@ -1,0 +1,39 @@
+version: '3.7'
+services:
+  # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
+  dns-server:
+    extends:
+      file: docker-compose-base.yml
+      service: dns-server-template
+    networks:
+      custom-network:
+        ipv4_address: 10.6.0.2
+    
+  captain-test-main:
+    extends: 
+      file: docker-compose-base.yml
+      service: captain-template
+    environment:
+      - SELF_URL=ws://10.6.0.11:7400
+    networks:
+      custom-network:
+        ipv4_address: 10.6.0.11
+    ports: 
+      - 8001:80
+    depends_on:
+      - dns-server
+    # dns:
+    #   - 10.6.0.2
+    #   - 8.8.4.4      
+    command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm run jest-exec']
+    # command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm exec -- jest --forceExit --detectOpenHandles --coverage']
+networks:
+  custom-network:
+    name: ${COMPOSE_PROJECT_NAME}-custom-network
+    driver: bridge
+    # disable ipv6 to simplify network setup
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 10.6.0.0/16
+          gateway: 10.6.0.1

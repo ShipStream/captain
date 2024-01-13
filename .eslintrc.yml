@@ -42,6 +42,10 @@ overrides:
   - files: ['*.ts']
     rules:
       'no-undef': 'off'
+  # test files specific rules
+  - files: ['__tests__/**/*.ts', 'jest.config.ts']
+    rules:
+      'node/no-unpublished-import': "off"
 env:
   node: true
   es2021: true

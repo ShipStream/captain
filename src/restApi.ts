@@ -1,13 +1,13 @@
 import {logger} from './coreUtils.js'
 import appConfig from './appConfig.js'
-import {webServices} from './appState.js'
+import appState from './appState.js'
 import {Application, NextFunction, Request, Response, Router, json} from 'express'
 
 const router = Router()
 
 router.get('/services', json(), async (req, res) => {
-  const services = Object.keys(webServices).map((eachKey) => {
-    return webServices[eachKey]?.getServiceDataForReporting()
+  const services = Object.keys(appState.webServices).map((eachKey) => {
+    return appState.webServices[eachKey]?.getServiceDataForReporting()
   })
   res.json(services)
 })

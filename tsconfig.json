@@ -36,7 +36,8 @@
     "./node_modules/**/*",
     "./dist",
     "./__simulation__/**/*",
-    "./__tests__/**/*",
-    "etsc.config.js"
+    "./__tests__",
+    "etsc.config.js",
+    "jest.config.ts",
   ]
 }

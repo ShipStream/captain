@@ -1,0 +1,10 @@
+process.env.MEMBER_URLS = 'ws://127.0.0.1:7401,ws://127.0.0.1:7402,ws://127.0.0.1:7403'
+process.env.SELF_URL = 'ws://127.0.0.1:7401'
+process.env.CAPTAIN_PORT = '7401'
+process.env.CAPTAIN_SECRET_KEY = 'erwoc2q34m23nlfWS69ri'
+process.env.DNS_PROVIDER = 'technitium'
+// process.env.DNS_PROVIDER="cloudflare"
+process.env.CLOUDFLARE_TOKEN = 'UP0KEzmHPVOAxUXWXxm5cGx08RK3KK08mB0sa_XF'
+process.env.CLOUDFLARE_ZONE_ID = 'd1b93bba94be44f37e7da633cb68d44d'
+process.env.TECHNITIUM_BASE_URL = 'http://10.6.0.2:5380'
+process.env.TECHNITIUM_CUSTOM_ZONE_NAME = 'ops'

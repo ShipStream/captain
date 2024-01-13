@@ -1,16 +1,17 @@
 import {logger} from './../coreUtils.js'
-import {isLeader} from './../appState.js'
+import appState from './../appState.js'
+import appConfig from './../appConfig.js'
 import {DnsManager} from './dnsManager.js'
 
 let sessionToken: string
-const TECHNITIUM_CUSTOM_ZONE_NAME = 'ops'
-const TECHNITIUM_BASE_URL = 'http://10.5.0.2:5380'
+
+export const ERROR_DNS_ZONE_NOT_INITIALIZED_PREFIX = `No such authoritative zone was found:`
 
 /**
  * Wrapper over node 'fetch' customized for typical response from technitium
  */
-async function customFetch(url: NodeJS.fetch.RequestInfo, init?: RequestInit) {
-  const response = await fetch(`${TECHNITIUM_BASE_URL}${url}`, init)
+async function customFetch(url: string, init?: RequestInit) {
+  const response = await fetch(`${appConfig.TECHNITIUM_BASE_URL}${url}`, init)
   if (response.ok) {
     const jsonResponse: any = await response.json()
     // logger.info('customFetch:', url, jsonResponse)
@@ -52,7 +53,7 @@ async function resolvedAddresses(zoneRecord: string): Promise<string[]> {
   const token = await getSessionToken()
   const params = new URLSearchParams({
     token,
-    zone: TECHNITIUM_CUSTOM_ZONE_NAME,
+    zone: appConfig.TECHNITIUM_CUSTOM_ZONE_NAME,
     domain: zoneRecord,
   }).toString()
   // logger.info('resolvedAddresses', params)
@@ -74,7 +75,7 @@ async function addZoneRecord(zoneRecord: string, ipAddress: string) {
   const token = await getSessionToken()
   const params = new URLSearchParams({
     token,
-    zone: TECHNITIUM_CUSTOM_ZONE_NAME,
+    zone: appConfig.TECHNITIUM_CUSTOM_ZONE_NAME,
     domain: zoneRecord,
     ipAddress: ipAddress,
     type: 'A',
@@ -101,7 +102,7 @@ async function removeZoneRecord(zoneRecord: string, ipAddress: string) {
   const token = await getSessionToken()
   const params = new URLSearchParams({
     token,
-    zone: TECHNITIUM_CUSTOM_ZONE_NAME,
+    zone: appConfig.TECHNITIUM_CUSTOM_ZONE_NAME,
     domain: zoneRecord,
     ipAddress: ipAddress,
     type: 'A',
@@ -124,26 +125,49 @@ async function removeZoneRecordMulti(zoneRecord: string, ipAddresses: string[]):
  * Custom validation/setup, specific for each dns provider
  */
 async function validateDnsConf() {
-  // Initialize token
-  const token = await getSessionToken()
   // Let leader handle it to avoid race condition
-  if (isLeader()) {
+  if (appState.isLeader()) {
+    await createZoneIfNotAvailable()
+  }
+}
+
+export async function createZoneIfNotAvailable() {
+    // Initialize token
+    const token = await getSessionToken()
     // All our zone records are put into a specific zone in technitium dns server
     // Check and create target zone if not available
     let zoneData = await customFetch(
-      `/api/zones/options/get?token=${token}&zone=${TECHNITIUM_CUSTOM_ZONE_NAME}&includeAvailableTsigKeyNames=true`
+      `/api/zones/options/get?token=${token}&zone=${appConfig.TECHNITIUM_CUSTOM_ZONE_NAME}&includeAvailableTsigKeyNames=true`
     ).catch(async (e) => {
-      if (e?.errorMessage === 'No such authoritative zone was found: ops') {
+      if (`${e?.errorMessage}`.startsWith(ERROR_DNS_ZONE_NOT_INITIALIZED_PREFIX)) {
         return null
       }
       throw e
     })
     if (!zoneData) {
       // Zone not available. Create it
-      zoneData = await customFetch(`/api/zones/create?token=${token}&zone=${TECHNITIUM_CUSTOM_ZONE_NAME}&type=Primary`)
+      zoneData = await customFetch(`/api/zones/create?token=${token}&zone=${appConfig.TECHNITIUM_CUSTOM_ZONE_NAME}&type=Primary`)
     }
-    logger.info('validateDnsConf', {data: zoneData})
-  }
+    logger.info('creatZoneIfNotAvailable', {data: zoneData})
+}
+
+/* Primarily for testing and development */
+export async function deleteZoneWithAllEntries() {
+  const token = await getSessionToken()
+  const params = new URLSearchParams({
+    token,
+    zone: appConfig.TECHNITIUM_CUSTOM_ZONE_NAME,
+  }).toString()
+  // logger.info('removeZoneRecord', params)
+  const deleteZoneWithAllEntriesResponse = await customFetch(`/api/zones/delete?${params}`).catch(async (e) => {
+    if (`${e?.errorMessage}`.startsWith(ERROR_DNS_ZONE_NOT_INITIALIZED_PREFIX)) {
+      return null
+    }
+    throw e
+  })
+  logger.info('deleteZoneWithAllEntries', {
+    deleteZoneWithAllEntriesResponse,
+  })  
 }
 
 const technitiumDnsManager: DnsManager = {

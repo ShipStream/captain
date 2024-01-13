@@ -8,44 +8,60 @@
   "scripts": {
     "lint:tsc": "tsc —noEmit",
     "lint:eslint": "eslint --ext .js,.ts src",
-    "dev": "nodemon",
+    "dev": "echo \"Use 'npm run docker:dev'\" && exit 1",
     "build": "tsc -p tsconfig.json",
-    "test": "jest --coverage",
+    "test": "echo \"Use 'npm run docker:test'\" && exit 1",
+    "jest-exec": "jest --detectOpenHandles --forceExit",
     "docker:dev": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans -d",
+    "docker:dev:attach": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans",
     "docker:dev:stop": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev stop",
-    "docker:dev:rm": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev rm -f -s -v"
+    "docker:dev:kill": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev kill --remove-orphans",
+    "docker:dev:rm": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev rm -f -s -v",
+    "docker:dev-prod": "docker compose -f docker-compose-prod.yml -p dns-orchestrator-prod up --build --remove-orphans",
+    "docker:test-old": "docker compose -f docker-compose-test.yml -p dns-orchestrator-test up --build --remove-orphans",
+    "docker:test-old2": "docker compose -f docker-compose-test.yml -p dns-orchestrator-test run -ti --rm --build --remove-orphans captain-1",
+    "docker:test": "docker compose -f docker-compose-test.yml -p dns-orchestrator-test up --build --remove-orphans --abort-on-container-exit --exit-code-from captain-test-main"
   },
   "engines": {
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "joi": "^17.11.0",
-    "jsonwebtoken": "^9.0.2",
-    "nanoid": "^5.0.4",
-    "socket.io": "^4.7.2",
-    "socket.io-client": "^4.7.2",
-    "yaml": "^2.3.4"
+    "express": "4.18.2",
+    "joi": "17.11.0",
+    "jsonwebtoken": "9.0.2",
+    "nanoid": "5.0.4",
+    "socket.io": "4.7.3",
+    "socket.io-client": "4.7.3",
+    "yaml": "2.3.4"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/node": "^20.10.1",
-    "@typescript-eslint/eslint-plugin": "^6.13.2",
-    "@typescript-eslint/parser": "^6.13.2",
-    "eslint": "^7.32.0",
-    "eslint-config-prettier": "^8.3.0",
-    "eslint-config-standard": "^16.0.3",
-    "eslint-import-resolver-typescript": "^3.6.1",
-    "eslint-plugin-import": "^2.24.2",
-    "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^4.0.0",
-    "eslint-plugin-promise": "^5.1.0",
-    "eslint-plugin-standard": "^5.0.0",
-    "nodemon": "^3.0.1",
-    "npm-run-all": "^4.1.5",
-    "prettier": "2.3.2",
-    "typescript": "^5.3.2"
+    "@types/express": "4.17.21",
+    "@types/jest": "29.5.11",
+    "@types/jsonwebtoken": "9.0.5",
+    "@types/node": "20.10.6",
+    "@typescript-eslint/eslint-plugin": "6.17.0",
+    "@typescript-eslint/parser": "6.17.0",
+    "eslint": "8.56.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-config-standard": "17.1.0",
+    "eslint-import-resolver-typescript": "3.6.1",
+    "eslint-plugin-import": "2.29.1",
+    "eslint-plugin-node": "11.1.0",
+    "eslint-plugin-prettier": "5.1.2",
+    "eslint-plugin-promise": "6.1.1",
+    "jest": "29.7.0",
+    "msw": "2.0.12",
+    "nodemon": "3.0.2",
+    "npm-run-all": "4.1.5",
+    "prettier": "3.1.1",
+    "ts-jest": "29.1.1",
+    "ts-node": "10.9.2",
+    "typescript": "5.3.3"
+  },
+  "overrides": {
+    "msw": {
+      "typescript": "$typescript"
+    }
   },
   "nodemonConfig": {
     "watch": [

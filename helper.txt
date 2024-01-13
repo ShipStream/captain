@@ -1,0 +1,9 @@
+docker run -ti --rm -v .:/app captain-app-dev-server /bin/bash
+docker rm -f `docker ps -a -q`
+docker rmi `docker images -a -q`
+
+docker logs `docker ps | grep dns-orchestrator-dev-captain-1 | awk '{print $1}'` -f -n 10
+docker exec -ti `docker ps | grep dns-orchestrator-dev-captain-1 | awk '{print $1}'` /bin/bash
+
+docker logs `docker ps | grep dns-orchestrator-dev-crm-app-2 | awk '{print $1}'` -f -n 10
+docker exec -ti `docker ps | grep dns-orchestrator-dev-crm-app-2 | awk '{print $1}'` /bin/bash

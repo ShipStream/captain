@@ -1,6 +1,8 @@
+import console from 'console'
 import appConfig from './appConfig.js'
-import {setLeaderUrl} from './appState.js'
-import {broadcastNewLeader} from './socket/captainSocketServerManager.js'
+import { initializeDnsManager } from './dns/dnsManager.js'
+import appState from './appState.js'
+import webServiceHelper from './web-service/webServiceHelper.js'
 
 /**
  *
@@ -17,9 +19,9 @@ class Logger {
    * @memberof Logger
    */
   debug(message: any, ...params: any[]) {
-    if (appConfig.DEBUG) {
-      console.log(message, ...params)
-    }
+    // if (appConfig.DEBUG) {
+    console.log(message, ...params)
+    // }
   }
 
   /**
@@ -56,14 +58,43 @@ class Logger {
   }
 }
 
-export const logger = new Logger()
+console.log('appConfig.NODE_ENV:', appConfig.NODE_ENV)
+export const logger = appConfig.NODE_ENV === 'test' ? console : new Logger()
 
 export function checkAndPromoteToLeader() {
+  console.info('checkAndPromoteToLeader', {
+    'appConfig.MEMBER_URLS[0]': appConfig.MEMBER_URLS[0],
+    'appConfig.SELF_URL': appConfig.SELF_URL,
+  })
   if (appConfig.MEMBER_URLS[0] === appConfig.SELF_URL) {
     logger.info('checkAndPromoteToLeader', 'I AM LEADER')
-    setLeaderUrl(appConfig.SELF_URL)
-    broadcastNewLeader(appConfig.SELF_URL)
+    appState.setLeaderUrl(appConfig.SELF_URL)
+    appState.getSocketManager().broadcastNewLeader(appConfig.SELF_URL)
   }
+}
+
+export async function initializeAppModules() {
+  await appState.registerRaceHandler()
+  await appState.registerCaptainSocketServer(appConfig.CAPTAIN_PORT, {
+    /* options */
+  })  
+  checkAndPromoteToLeader()
+  await initializeDnsManager() // Depends on 'checkAndPromoteToLeader'
+  await webServiceHelper.processWebServiceFileYAML()
+  await appState.connectWithOtherCaptains(
+    appConfig.MEMBER_URLS.filter((eachMember: string) => eachMember !== appConfig.SELF_URL)
+  )
+}
+
+
+/**
+ * Reload app on sighup. Also used for reload app between tests
+ *
+ */
+export async function softReloadApp() {
+  // processWebServiceFileYAML()
+  await appState.resetAppState({ resetSockets: true, resetWebApps: true, resetLockHandlers: true })
+  await initializeAppModules()
 }
 
 /*
@@ -71,6 +102,8 @@ export function checkAndPromoteToLeader() {
  * Uses 100ms intervals to check for released lock
  */
 export class CustomRaceConditionLock {
+  _deleted = false
+  _cleanLocksReference?: any
   lockedKeys: any
 
   // Max wait time before error out, obtaining lock
@@ -83,6 +116,7 @@ export class CustomRaceConditionLock {
   static cleanUpHandlerInterval = 1000 * 60 * 15 // 15 minute
 
   static failedToObtainLockErrMsg = 'Failed to obtain lock within the timeout period.'
+  static lockObsolete = 'Failed to obtain lock as lock obsolete due to soft reload of the app.'
 
   constructor() {
     // Using hash of lock-key vs grant-time to facilitate cleanup
@@ -91,7 +125,7 @@ export class CustomRaceConditionLock {
     // Clean up long locks.
     // Honors only min-lock-hold-guarantee.
     // Doesn't offer any other guarantees. Keeping it simple.
-    setInterval(async () => {
+    this._cleanLocksReference = setInterval(async () => {
       logger.info(`CustomRaceConditionLock: Cleanup locks`)
       for (const eachKey of Object.keys(this.lockedKeys)) {
         const lockHoldTime = Date.now() - this.lockedKeys[eachKey]
@@ -107,6 +141,9 @@ export class CustomRaceConditionLock {
     return new Promise((resolve, reject) => {
       const startTime = Date.now()
       const checkLock = () => {
+        if (this._deleted) {
+          return reject(new Error(CustomRaceConditionLock.lockObsolete))
+        }
         if (!this.lockedKeys[key]) {
           this.lockedKeys[key] = Date.now()
           const lockInstance = [key, this.lockedKeys[key]]
@@ -137,6 +174,11 @@ export class CustomRaceConditionLock {
       }
     }
   }
-}
 
-export const raceConditionHandler = new CustomRaceConditionLock()
+  cleanUpForDeletion() {
+    this._deleted = true
+    if (this._cleanLocksReference) {
+      clearInterval(this._cleanLocksReference)
+    }
+  }
+}
