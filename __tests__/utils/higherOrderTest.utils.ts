@@ -4,7 +4,7 @@ import {dnsManager} from '../../src/dns/dnsManager.js'
 import {WebServiceManager} from '../../src/web-service/webServiceManager.js'
 import * as WebServiceHelper from '../../src/web-service/webServiceHelper.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
-import webAppTest from './webAppTest.utils.js'
+import webAppTest from './appTest.utils.js'
 import {MockSocketClientManager} from './socketMockTest.utils.js'
 
 /**
@@ -12,19 +12,29 @@ import {MockSocketClientManager} from './socketMockTest.utils.js'
  * Wait time calculated using the services's polling interval and timeouts
  * @param {WebServiceManager} webService
  * @param {string} targetIP
- * @param {number} count
+ * @param {number} pollingCount
  */
-async function waitForPollSuccessCount(webService: WebServiceManager, targetIP: string, count: number, verifyState: boolean = true) {
-  const timeOutInMs = webAppTest.getTimeOutInMillisPollSuccess(webService, count)
+async function waitForPollSuccessCount(
+  webService: WebServiceManager,
+  targetIP: string,
+  pollingCount: number,
+  verifyState: boolean = true
+) {
+  // calculate required timeout based pollingInterval, readTimeout, connectTimeout and 'pollingCount'
+  const timeOutInMs =
+    (webAppTest.getPollingInterval(webService) * pollingCount +
+      (webService.readTimeout + webService.connectTimeout) +
+      5) *
+    1000
   await expect(
-    commonTest.waitUntilCalled(webService, 'pollSuccess', [MATCH_ANY_VALUE, targetIP], count, timeOutInMs)
+    commonTest.waitUntilCalled(webService, 'pollSuccess', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
   ).resolves.not.toThrow()
   if (verifyState) {
     await commonTest.advanceBothRealAndFakeTime(1000)
     const checksStateOfTargetIP = webAppTest.getChecksDataByCaptainAndIP(webService, appConfig.SELF_URL, targetIP)
     commonTest.attentionLog('waitForPollSuccessCount', checksStateOfTargetIP)
     // expect(checksStateOfTargetIP?.passing).toBeGreaterThanOrEqual(count)
-    expect(checksStateOfTargetIP?.passing).toBe(count)  
+    expect(checksStateOfTargetIP?.passing).toBe(pollingCount)
   }
 }
 
@@ -33,18 +43,28 @@ async function waitForPollSuccessCount(webService: WebServiceManager, targetIP: 
  * Wait time calculated using the services's polling interval and timeouts
  * @param {WebServiceManager} webService
  * @param {string} targetIP
- * @param {number} count
+ * @param {number} pollingCount
  */
-async function waitForPollFailureCount(webService: WebServiceManager, targetIP: string, count: number, verifyState: boolean = true) {
-  const timeOutInMs = webAppTest.getTimeOutInMillisPollFailed(webService, count)
+async function waitForPollFailureCount(
+  webService: WebServiceManager,
+  targetIP: string,
+  pollingCount: number,
+  verifyState: boolean = true
+) {
+  // calculate required timeout based pollingInterval, readTimeout, connectTimeout and 'pollingCount'
+  const timeOutInMs =
+    (webAppTest.getPollingInterval(webService) * pollingCount +
+      (webService.readTimeout + webService.connectTimeout) +
+      5) *
+    1000
   await expect(
-    commonTest.waitUntilCalled(webService, 'pollFailed', [MATCH_ANY_VALUE, targetIP], count, timeOutInMs)
+    commonTest.waitUntilCalled(webService, 'pollFailed', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
   ).resolves.not.toThrow()
   if (verifyState) {
     await commonTest.advanceBothRealAndFakeTime(1000)
     const checksStateOfTargetIP = webAppTest.getChecksDataByCaptainAndIP(webService, appConfig.SELF_URL, targetIP)
     // expect(checksStateOfTargetIP?.failing).toBeGreaterThanOrEqual(count)
-    expect(checksStateOfTargetIP?.failing).toBe(count)  
+    expect(checksStateOfTargetIP?.failing).toBe(pollingCount)
   }
 }
 
@@ -458,12 +478,3 @@ const higherOrderTest = {
 }
 
 export default higherOrderTest
-
-// to be added to readme
-// a). verifyState field of 'healthCheckRequest'
-// b). bulk update events
-// c). change_polling_frequency event
-
-// don't hardcord ip/zonerecord in test file. read it from test_one_services.yaml
-
-// convert waitUntilPredicateSucceeds functions into higher order ones

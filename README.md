@@ -63,6 +63,7 @@ A Captain instance has the following configuration environment variables:
 | `CLOUDFLARE_ZONE_ID`         | The Cloudflare Zone ID where records will be updated                                                                                                                     |              |
 | `SLACK_TOKEN`                | The API token for sending Slack notifications                                                                                                                            |              |
 | `SLACK_CHANNEL_ID`           | The Slack channel ID for sending Slack notifications                                                                                                                     |              |
+| `DATADOG_SITE`            | There are several Datadog sites available worldwide, we need to specify which one                                                                                                                               |              |
 | `DATADOG_API_KEY`            | The API key for logging events to Datadog                                                                                                                                |              |
 | `NOTIFICATION_URL`           | The url to post HTTP notifications to                                                                                                                                    |              |
 | `NOTIFICATION_HEADER`        | A header to include in the HTTP notification requests                                                                                                                    |              |
@@ -270,13 +271,17 @@ fall values. The members will then start emitting the health check update descri
 
 ```json
 {
-  "service": "captain"
+  "service": "captain",
+  "address": "34.34.34.34",
+  "verifyState": "passing"
 }
 ```
 
+The "verifyState" can be either "passing" or "failing". It helps decide, whether to reset an ongoing health check ( that has not reached rise/fall yet ), if there is a change in the health of an "address" from "passing" to "failing" or "failing" to "passing".
+
 Additionally, a health check request for each service that is provided by a Mate is sent to the other members when
 the Mate disconnects from a Captain unexpectedly. This ensures that if the node the Mate is running on goes offline,
-the health check failure will not go undetected. 
+the health check failure will not go undetected.
 
 ### Health check updates
 
@@ -309,6 +314,14 @@ It is assumed that the services provided by the member config file is already sy
 health check updates received for services that are not recognized are logged as unrecognized service names and then
 ignored. 
 
+### Bulk health check updates
+
+The bulk health check update reports the consecutive passing and failing counts for all IP addresses of all the services currently being tracked.
+
+It is used only when a new captain peer joins the network. Helps in efficiently transferring data to the newly discovered captain.
+
+The message format is an array of the normal "Health check updates" described above.
+
 ### Active addresses
 
 When a leader updates the active addresses for a service, it propagates the new values to the other members so that
@@ -322,6 +335,20 @@ they have the correct state.
   ]
 }
 ```
+
+### Bulk active addresses
+
+This message reports the current active addresses of all the services being tracked.
+
+It is used only when a new captain peer joins the network. Helps in efficiently transferring data to the newly discovered captain.
+
+The message format is an array of the normal "Active addresses" message described above.
+
+### Change polling frequency
+
+Only the leader maintains the web service "status" ("healthy" OR "unhealthy").
+
+Since the polling need to use "healthy_interval" or "unhealthy_interval" based on health "status" of the service, leader communicates the polling frequency required via this message "broadcast" to non-leader members
 
 # State Management
 

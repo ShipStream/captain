@@ -2,7 +2,6 @@ import Joi from 'joi'
 
 const appConfig: any = {}
 
-// console.log('appConfig:process.env', process.env)
 export function processAppEnvironement() {
   const joiEnvSchema = Joi.object()
     .keys({
@@ -39,6 +38,15 @@ export function processAppEnvironement() {
       SELF_URL: Joi.string().required().description('SELF_URL'),
       CAPTAIN_PORT: Joi.number().description('CAPTAIN_PORT').default(7400),
       CAPTAIN_SECRET_KEY: Joi.string().required().description('CAPTAIN_SECRET_KEY'),
+      CONSUL_HTTP_ADDR: Joi.string().optional().description('CONSUL_HTTP_ADDR'),
+      CONSUL_HTTP_TOKEN: Joi.string().optional().description('CONSUL_HTTP_TOKEN'),
+      CONSUL_LEADER_INTERVAL: Joi.number().description('CONSUL_LEADER_INTERVAL').default(5),
+      SLACK_TOKEN: Joi.string().optional().description('SLACK_TOKEN'),
+      SLACK_CHANNEL_ID: Joi.string().optional().description('SLACK_CHANNEL_ID'),
+      DATADOG_SITE: Joi.string().optional().description('DATADOG_API_KEY'),
+      DATADOG_API_KEY: Joi.string().optional().description('DATADOG_API_KEY'),
+      NOTIFICATION_URL: Joi.string().optional().description('NOTIFICATION_URL'),
+      NOTIFICATION_HEADER: Joi.string().optional().description('NOTIFICATION_HEADER'),     
       DNS_PROVIDER: Joi.string()
         .description('DNS_PROVIDER')
         .default('cloudflare')
@@ -65,9 +73,10 @@ export function processAppEnvironement() {
   }
   Object.assign(appConfig, {
     ...envVars,
+    SLACK_BASE_URL: 'https://slack.com/api',
     API_PREFIX: '/v1',
   })
-  console.info('appConfig:', appConfig)
+  // console.info('appConfig:', appConfig)
 }
 
 processAppEnvironement()

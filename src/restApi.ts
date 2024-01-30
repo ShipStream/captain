@@ -7,7 +7,7 @@ const router = Router()
 
 router.get('/services', json(), async (req, res) => {
   const services = Object.keys(appState.webServices).map((eachKey) => {
-    return appState.webServices[eachKey]?.getServiceDataForReporting()
+    return appState.webServices[eachKey]?.getServiceDataForAPI()
   })
   res.json(services)
 })

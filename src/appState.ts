@@ -8,6 +8,8 @@ import { CaptainSocketServerManager } from './socket/SocketServerManager.js'
 import { CustomRaceConditionLock, logger } from './coreUtils.js'
 import { SOCKET_CLIENT_LOG_ID } from './socket/captainSocketHelper.js'
 import { SocketClientManager } from './socket/SocketClientManager.js'
+import { ConsulService } from './ConsulService.js'
+import { NotificationService } from './NotificationService.js'
 
 class AppState {
   // 'State' (Hash) of all web services.
@@ -54,7 +56,7 @@ class AppState {
   // Maintain 'state' about leader of the 'captains'
   leaderURL?: string
 
-  setLeaderUrl(inputLeaderUrl: string) {
+  setLeaderUrl(inputLeaderUrl?: string) {
     this.leaderURL = inputLeaderUrl
   }
 
@@ -135,7 +137,27 @@ class AppState {
     this.raceHandler = new CustomRaceConditionLock()
   }
 
-  async resetAppState({ resetSockets, resetWebApps, resetLockHandlers }: { resetSockets: boolean, resetWebApps: boolean, resetLockHandlers: boolean }) {
+  consulService!: ConsulService
+
+  getConsulService() {
+    return this.consulService
+  }
+
+  async registerConsulService() {
+    this.consulService = await ConsulService.createConsulService()  
+  }
+
+  notificationService!: NotificationService
+
+  getNotificationService() {
+    return this.notificationService
+  }
+
+  async registerNotificationService() {
+    this.notificationService = await NotificationService.createNotificationService()  
+  }
+
+  async resetAppState({ resetSockets, resetWebApps, resetLockHandlers, resetLeaderShip }: { resetSockets: boolean, resetWebApps: boolean, resetLockHandlers: boolean, resetLeaderShip: boolean }) {
     if (resetSockets) {
       // console.log('softReloadApp:Step1:terminate socket server connections')
       await appState.getSocketManager().cleanUpForDeletion()
@@ -162,7 +184,11 @@ class AppState {
     }
     if (resetLockHandlers) {
       appState.getRaceHandler().cleanUpForDeletion()
-    }  
+    }
+    // reset leadership data
+    if (resetLeaderShip) {
+      appState.setLeaderUrl(undefined)
+    }
   }
 }
 

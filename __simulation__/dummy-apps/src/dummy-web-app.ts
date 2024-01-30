@@ -2,8 +2,19 @@ import express from 'express'
 import {createServer} from 'http'
 
 const app = express()
+app.use((req, res, next) => {
+  // console.log('inspect', JSON.stringify({
+  //   'originalUrl': req.originalUrl,
+  //   'method': req.method,
+  //   'body': req.body,
+  //   'headers': req.headers,
+  //   'query': req.query,
+  // }))
+  return next()
+})
+
 app.get('/health', async (req, res) => {
-  console.log('Received health check:1', new Date())
+  console.log('Received health check:3', new Date())
   // await new Promise((resolve, _reject) => {
   //   setTimeout(() => resolve(1), 6100)
   // })
@@ -21,5 +32,5 @@ app.get('/health', async (req, res) => {
 const httpServer = createServer(app)
 
 httpServer.listen(80, async function () {
-  console.log(`App listening at`, httpServer?.address?.())
+  console.log(`App listening at 4`, httpServer?.address?.())
 })

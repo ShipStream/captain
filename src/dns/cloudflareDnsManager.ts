@@ -29,7 +29,7 @@ async function customFetch(url: string, fetchParams?: RequestInit) {
       Authorization: `Bearer ${token}`,
     },
   })
-  console.log('cloudflareDnsManager:customFetch', await response.clone().text())
+  logger.info('cloudflareDnsManager:customFetch', await response.clone().text())
   if (response.ok) {
     const jsonResponse: any = await response.json()
     if (jsonResponse.success === true) {
@@ -180,16 +180,17 @@ async function removeZoneRecordMulti(zoneRecord: string, ipAddresses: string[]):
  * Custom validation/setup, specific for each dns provider
  */
 async function validateDnsConf() {
-  if (appState.isLeader()) {
-    // fetch zone details to test connection and auth
-    const zoneDetails = await customFetch('', {
-      method: 'get',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-    logger.info('validateDnsConf', {zoneDetails: zoneDetails?.result})
+  if (!appState.isLeader()) {
+    logger.warn('Dns initialized on non-leader.')
   }
+  // fetch zone details to test connection and auth
+  const zoneDetails = await customFetch('', {
+    method: 'get',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+  logger.info('validateDnsConf', {zoneDetails: zoneDetails?.result})
 }
 
 const cloudflareDnsManager: DnsManager = {

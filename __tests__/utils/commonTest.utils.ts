@@ -1,4 +1,3 @@
-import {join} from 'path'
 import console from 'console'
 import appConfig from './../../src/appConfig.js'
 import {isAsyncFunction} from 'util/types'
@@ -21,10 +20,6 @@ async function advanceBothRealAndFakeTime(millis: number) {
 
 async function advanceRealTime(millis: number) {
   await new Promise((resolve) => (global as any).originalSetTimeout(resolve, millis))
-}
-
-function getServicesYAMLPath(inputFileName: string) {
-  return join('..', 'data', inputFileName)
 }
 
 const timerFakeAbleAPIList = [
@@ -160,12 +155,12 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
             requiredValue === invokedValue ||
             requiredValue === MATCH_ANY_VALUE ||
             (Array.isArray(requiredValue) && commonTest.isArraysEqual(requiredValue, invokedValue))
-          console.log('waitUntilCalled:argsList.every', {
-            invokedValueIndex,
-            invokedValue,
-            requiredValue,
-            eachArgMatchResult,
-          })
+          // console.log('waitUntilCalled:argsList.every', {
+          //   invokedValueIndex,
+          //   invokedValue,
+          //   requiredValue,
+          //   eachArgMatchResult,
+          // })
           return eachArgMatchResult
         })
         // commonTest.attentionLog(`${logID}:changeCount`, {
@@ -204,14 +199,9 @@ function isArraysEqual(arrayOne: any[], arrayTwo: any[]) {
   return result
 }
 
-function getRemoteCaptains() {
-  return appConfig.MEMBER_URLS?.filter((eachUrl: string) => eachUrl !== appConfig.SELF_URL)
-}
-
 const commonTest = {
   advanceBothRealAndFakeTime,
   advanceRealTime,
-  getServicesYAMLPath,
   timerFakeAbleAPIList,
   passTimeInMillis,
   usingFakeTimers,
@@ -220,7 +210,6 @@ const commonTest = {
   waitUntilCalled,
   waitUntilPredicateSucceeds,
   isArraysEqual,
-  getRemoteCaptains,
 }
 
 export default commonTest

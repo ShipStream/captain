@@ -145,11 +145,15 @@ async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServi
     // console.trace(new Date().toUTCString(), logID)
     // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
     raceCondLock = await appState.getRaceHandler().getLock(webService.logID)
-    if (!appState.isLeader()) {
-      throw new Error('Only leader can alter active addresses')
-    }
     // Verify 'passing' aggreement with all 'peer' checks
     if (verifyPassingAggreement(webService, ipAddress)) {
+      // appState.getConsulService() will be undefined for 'fallback' leadership, in which case, we skip 'reAffirmLeadership'
+      if (appState.getConsulService()) {
+        if (!appState.getConsulService().reAffirmLeadership()) {
+          // Only leader can alter active addresses
+          return false;
+        }
+      }
       const activeAddresses = webService.serviceState.active || []
       // ipAddress can be added to the system in the following three cases.
       // a). Failover new target
@@ -221,11 +225,15 @@ async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
     // console.trace(new Date().toUTCString(), logID)
     // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
     raceCondLock = await appState.getRaceHandler().getLock(webService.logID)
-    if (!appState.isLeader()) {
-      throw new Error('Only leader can alter active addresses')
-    }
     // Verify 'failing' aggreement with all 'peer' checks
     if (verifyFailingAggreement(webService, ipAddress)) {
+      // appState.getConsulService() will be undefined for 'fallback' leadership, in which case, we skip 'reAffirmLeadership'
+      if (appState.getConsulService()) {
+        if (!appState.getConsulService().reAffirmLeadership()) {
+          // Only leader can alter active addresses
+          return false;
+        }
+      }
       // When failover is in progress ( cool down ), ignore request to remove any ip and ignore potentially processing another failover
       // eg: the new failed over target itself could go down but wait until failover cooldown before making decision
       if (webService.isFailOverInProgress()) {

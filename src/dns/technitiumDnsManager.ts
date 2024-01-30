@@ -126,9 +126,10 @@ async function removeZoneRecordMulti(zoneRecord: string, ipAddresses: string[]):
  */
 async function validateDnsConf() {
   // Let leader handle it to avoid race condition
-  if (appState.isLeader()) {
-    await createZoneIfNotAvailable()
+  if (!appState.isLeader()) {
+    logger.warn('createZoneIfNotAvailable called from non-leader')
   }
+  await createZoneIfNotAvailable()
 }
 
 export async function createZoneIfNotAvailable() {

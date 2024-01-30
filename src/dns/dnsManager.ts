@@ -1,3 +1,4 @@
+import {logger} from '../coreUtils.js'
 import appConfig from '../appConfig.js'
 import cloudflareDnsManager from './cloudflareDnsManager.js'
 import technitiumDnsManager from './technitiumDnsManager.js'

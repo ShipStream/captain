@@ -19,29 +19,35 @@ services:
       - MEMBER_URLS=${MEMBER_URLS}
       - CAPTAIN_PORT=${CAPTAIN_PORT}
       - CAPTAIN_SECRET_KEY=${CAPTAIN_SECRET_KEY}
+      - CONSUL_HTTP_TOKEN=${CONSUL_HTTP_TOKEN}
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
       - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
+      - SLACK_TOKEN=${SLACK_TOKEN}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      - DATADOG_API_KEY=${DATADOG_API_KEY}
+      - DATADOG_SITE=${DATADOG_SITE}
+      - NOTIFICATION_URL=${NOTIFICATION_URL}
+      - NOTIFICATION_HEADER=${NOTIFICATION_HEADER}
     volumes:
       - .:/app
       - ./__simulation__/data:/data
       - /app/dist
       - /app/.pnpm-store
       - /app/node_modules
+      - ./__simulation__/real-consul-app/certs/:/consul/config/certs/:ro
     entrypoint: ['sh', '-c']
     # command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
-    command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    command:
+      - |
+        run-consul.sh
+        pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234
 
-  web-app-template:
+  dummy-apps:
     build:
-      context: ./__simulation__/web-app
-      target: develop-stage
+      context: ./__simulation__/dummy-apps
     environment:
       - NODE_ENV=${NODE_ENV}
-    volumes:
-      - ./__simulation__/web-app:/app
-      - /app/dist
-      - /app/.pnpm-store
-      - /app/node_modules
     entrypoint: ['sh', '-c']
     command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
 

@@ -6,108 +6,143 @@ services:
       service: captain-template
     environment:
       - SELF_URL=ws://10.5.0.11:7400
-      - DEBUG=true
+      # real consul installed
+      # - CONSUL_HTTP_ADDR=http://127.0.0.1:8500
+      # dummy consul
+      - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-1
     networks:
       custom-network:
         ipv4_address: 10.5.0.11
+    volumes:
+      - ./__simulation__/real-consul-app/server1.json:/consul/config/server1.json:ro
     ports: 
       - 8001:80
-    dns:
-      - 10.5.0.2
-      - 8.8.4.4      
+      - 8500:8500
+      - 8600:8600/tcp
+      - 8600:8600/udp
+    depends_on:
+      - dummy-consul-apps
   captain-2:
     extends: 
       file: docker-compose-base.yml
       service: captain-template
     environment:
       - SELF_URL=ws://10.5.0.12:7400
+      # real consul installed
+      # - CONSUL_HTTP_ADDR=http://127.0.0.1:8500
+      # dummy consul
+      - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-2
     networks:
       custom-network:
         ipv4_address: 10.5.0.12
+    volumes:
+      - ./__simulation__/real-consul-app/server2.json:/consul/config/server2.json:ro
     ports: 
       - 8002:80
-    dns:
-      - 10.5.0.2
-      - 8.8.4.4      
+    depends_on:
+      - dummy-consul-apps
   captain-3:
     extends: 
       file: docker-compose-base.yml
       service: captain-template
     environment:
       - SELF_URL=ws://10.5.0.13:7400
+      # real consul installed
+      # - CONSUL_HTTP_ADDR=http://127.0.0.1:8500
+      # dummy consul
+      - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-3
     networks:
       custom-network:
         ipv4_address: 10.5.0.13
+    volumes:
+      - ./__simulation__/real-consul-app/server3.json:/consul/config/server3.json:ro
     ports: 
       - 8003:80
-    dns:
-      - 10.5.0.2
-      - 8.8.4.4
+    depends_on:
+      - dummy-consul-apps
   crm-app-1:
     extends:
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.21
   crm-app-2:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.22
   crm-app-3:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.23
   ecommerce-app-1:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.31
   ecommerce-app-2:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.32
   ecommerce-app-3:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.33
   ecommerce-app-4:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.34
   helpdesk-app-1:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.41
   helpdesk-app-2:
     extends: 
       file: docker-compose-base.yml
-      service: web-app-template
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-web-app.ts:/app/src/index.ts:ro
     networks:
       custom-network:
         ipv4_address: 10.5.0.42
 
-  # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
+  # # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
   dns-server:
     extends:
       file: docker-compose-base.yml
@@ -115,6 +150,33 @@ services:
     networks:
       custom-network:
         ipv4_address: 10.5.0.2
+
+  # single app that simulate all the three consuls based on different url-prefix
+  # ping dummy-consul-apps
+  # dig dummy-consul-apps
+  dummy-consul-apps:
+    extends:
+      file: docker-compose-base.yml
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-consul-app.ts:/app/src/index.ts:ro
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.3
+    expose:
+      - 80
+
+  dummy-http-notification:
+    extends:
+      file: docker-compose-base.yml
+      service: dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps/src/dummy-http-notification-app.ts:/app/src/index.ts:ro
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.4
+    expose:
+      - 80
 
 networks:
   custom-network:

@@ -1,4 +1,3 @@
-import {notifyFailOverFailed, notifyFailOverSucceeded} from './../notificationService.js'
 import appConfig from '../appConfig.js'
 import appState from '../appState.js'
 import {dnsManager} from '../dns/dnsManager.js'
@@ -152,15 +151,25 @@ export class WebServiceManager {
         }, {}),
       },
       active: [], // will be set after initial Dns update query
-      ...(appState.isLeader() && {
-        status: WEB_SERVICE_STATUS.HEALTHY, // will begin 'healthy'
-        failover: null,
-        failover_progress: null,
-        failover_progress_history: null,
-        failover_started: null,
-        failover_finished: null,
-      }),
     }
+    if (appState.isLeader()) {
+      this.initializeHealthAndFailoverStats()
+    }
+  }
+
+  // only leader maintain these stats
+  public initializeHealthAndFailoverStats() {
+    if (!appState.isLeader()) {
+      logger.warn('initializeHealthAndFailoverStats called on non-leader')
+    }
+    Object.assign(this.serviceState, {
+      status: WEB_SERVICE_STATUS.HEALTHY, // will begin 'healthy'
+      failover: null,
+      failover_progress: null,
+      failover_progress_history: null,
+      failover_started: null,
+      failover_finished: null,
+    })
   }
 
   // Factory to create webservice
@@ -197,7 +206,9 @@ export class WebServiceManager {
         logger.warn(eachIPLogID, 'POLL-SUCCESS', 'ALERT-STATUS-CHANGE', "'failing' to 'passing'", 'RESET STATS')
         // reset health check stats and try from zero again
         this.resetHealthCheckByIP(ipAddress)
-        appState.getSocketManager().broadcastRequestForHealthCheck(this, HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING, ipAddress)
+        appState
+          .getSocketManager()
+          .broadcastRequestForHealthCheck(this, HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING, ipAddress)
       } else if (stats.passing) {
         // no status change 'passing' before and 'passing' now
         if (stats.passing < this.rise) {
@@ -248,7 +259,9 @@ export class WebServiceManager {
         logger.warn(eachIPLogID, 'POLL-FAILED', 'ALERT-STATUS-CHANGE', "'passing' to 'failing'", 'RESET STATS')
         // reset health check stats and try from zero again
         this.resetHealthCheckByIP(ipAddress)
-        appState.getSocketManager().broadcastRequestForHealthCheck(this, HEALTH_CHECK_REQUEST_VERIFY_STATE.FAILING, ipAddress)
+        appState
+          .getSocketManager()
+          .broadcastRequestForHealthCheck(this, HEALTH_CHECK_REQUEST_VERIFY_STATE.FAILING, ipAddress)
       } else if (stats.failing) {
         // no status change 'failing' before and 'failing' now
         if (stats.failing < this.fall) {
@@ -425,7 +438,7 @@ export class WebServiceManager {
    */
   async initialize() {
     if (appState.isLeader()) {
-      await this.initialResolvedAndActiveAddressSync(this)
+      await this.initialResolvedAndActiveAddressSync()
     }
     this.initiatePolling(this.healthyInterval * 1000)
   }
@@ -435,12 +448,12 @@ export class WebServiceManager {
    * During sync, give preference to 'resolved_addresses' ( live dns query )
    * DELETES!! any unknown zone record ip's that is not part of 'available addresses' from 'resolved_addresses' as per services.yaml
    */
-  async initialResolvedAndActiveAddressSync(webService: WebServiceManager) {
-    const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(webService.serviceConf.zone_record)
-    const availableAddresses = webService.serviceConf.addresses
+  public async initialResolvedAndActiveAddressSync() {
+    const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)
+    const availableAddresses = this.serviceConf.addresses
 
     let newActiveAddresses: string[]
-    if (webService.serviceConf.multi) {
+    if (this.serviceConf.multi) {
       // multiple active_addresses addresses
       // add all available addresses to 'active_addresses' list
       newActiveAddresses = [...availableAddresses]
@@ -462,7 +475,25 @@ export class WebServiceManager {
         newActiveAddresses = [availableAddresses[0]!]
       }
     }
-    await this.handleActiveAddressChange(newActiveAddresses)
+    await this.handleActiveAddressChange(newActiveAddresses).then(() => {
+      // if (newActiveAddresses?.length === 1) {
+      //   this.handleActiveAddressChange(['10.5.0.22']).catch((e: any) => {
+      //     console.error(e)
+      //   })
+      //   setTimeout(() => {
+      //     this.handleActiveAddressChange(['10.5.0.22', '10.5.0.23']).catch((e: any) => {
+      //       console.error(e)
+      //     })
+      //     this.handleActiveAddressChange(['10.5.0.23']).catch((e: any) => {
+      //       console.error(e)
+      //     })
+      //   }, 2000)
+      // } else {
+      //   this.handleActiveAddressChange(newActiveAddresses.reverse()).catch((e: any) => {
+      //     console.error(e)
+      //   })
+      // }
+    })
   }
 
   /**
@@ -475,52 +506,53 @@ export class WebServiceManager {
    */
   public async handleActiveAddressChange(newActiveAddresses: string[]) {
     // Check isLeader
-    if (appState.isLeader()) {
-      // set 'active_addresses'
-      this.serviceState.active = newActiveAddresses
-
-      // Begin the sync with live 'resolved_addresses'
-      const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)
-      // Availables ipaddress options as per configuration
-      const knownAddresses = this.serviceConf.addresses
-      const knownResolvedAddresses = resolvedAddresses.filter((eachIpAddress) => knownAddresses.includes(eachIpAddress))
-      const unKnownResolvedAddresses = resolvedAddresses.filter(
-        (eachIpAddress) => !knownAddresses.includes(eachIpAddress)
+    if (!appState.isLeader()) {
+      // just warn but don't deny as started operation needs to be finished even in case of change in leadership
+      logger.warn(
+        'Only leader can sync resolved_addresses and broadcast active_addresses, but handleActiveAddressChange called on non-leader'
       )
-      const addressesToBeAdded = newActiveAddresses.filter((eachIPAddres: string) => {
-        return !knownResolvedAddresses.includes(eachIPAddres)
-      })
-      const addressesToBeDeleted = knownResolvedAddresses.filter((eachIPAddres: string) => {
-        return !newActiveAddresses.includes(eachIPAddres)
-      })
-      logger.info('handleActiveAddressChange', {
-        newActiveAddresses,
-        resolvedAddresses,
-        knownAddresses,
-        knownResolvedAddresses,
-        unKnownResolvedAddresses,
-        addressesToBeAdded,
-        addressesToBeDeleted,
-      })
-      // throw new Error('handleActiveAddressChange')
-
-      if (addressesToBeAdded?.length) {
-        await dnsManager.addZoneRecordMulti(this.serviceConf.zone_record, addressesToBeAdded)
-      }
-      if (addressesToBeDeleted?.length) {
-        await dnsManager.removeZoneRecordMulti(this.serviceConf.zone_record, addressesToBeDeleted)
-      }
-      // Remove unknown addresses only if there is atleast a single valid active ipaddress
-      if (newActiveAddresses?.length && unKnownResolvedAddresses?.length) {
-        await dnsManager.removeZoneRecordMulti(this.serviceConf.zone_record, unKnownResolvedAddresses)
-      }
-
-      // Broadcast to 'members'
-      appState.getSocketManager().broadcastActiveAddresses(this)
-    } else {
-      // Call the other method 'setActiveAddresses' from 'members' instance
-      throw new Error('Only leader can sync resolved_addresses and broadcast active_addresses')
     }
+    // set 'active_addresses'
+    this.serviceState.active = newActiveAddresses
+
+    // Begin the sync with live 'resolved_addresses'
+    const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)
+    // Availables ipaddress options as per configuration
+    const knownAddresses = this.serviceConf.addresses
+    const knownResolvedAddresses = resolvedAddresses.filter((eachIpAddress) => knownAddresses.includes(eachIpAddress))
+    const unKnownResolvedAddresses = resolvedAddresses.filter(
+      (eachIpAddress) => !knownAddresses.includes(eachIpAddress)
+    )
+    const addressesToBeAdded = newActiveAddresses.filter((eachIPAddres: string) => {
+      return !knownResolvedAddresses.includes(eachIPAddres)
+    })
+    const addressesToBeDeleted = knownResolvedAddresses.filter((eachIPAddres: string) => {
+      return !newActiveAddresses.includes(eachIPAddres)
+    })
+    logger.info('handleActiveAddressChange', {
+      newActiveAddresses,
+      resolvedAddresses,
+      knownAddresses,
+      knownResolvedAddresses,
+      unKnownResolvedAddresses,
+      addressesToBeAdded,
+      addressesToBeDeleted,
+    })
+    // throw new Error('handleActiveAddressChange')
+
+    if (addressesToBeAdded?.length) {
+      await dnsManager.addZoneRecordMulti(this.serviceConf.zone_record, addressesToBeAdded)
+    }
+    if (addressesToBeDeleted?.length) {
+      await dnsManager.removeZoneRecordMulti(this.serviceConf.zone_record, addressesToBeDeleted)
+    }
+    // Remove unknown addresses only if there is atleast a single valid active ipaddress
+    if (newActiveAddresses?.length && unKnownResolvedAddresses?.length) {
+      await dnsManager.removeZoneRecordMulti(this.serviceConf.zone_record, unKnownResolvedAddresses)
+    }
+
+    // Broadcast to 'members'
+    appState.getSocketManager().broadcastActiveAddresses(this)
   }
 
   /**
@@ -530,14 +562,14 @@ export class WebServiceManager {
    * @memberof WebServiceManager
    */
   public async setActiveAddresses(newActiveAddresses: string[]) {
-    if (!appState.isLeader()) {
-      this.serviceState.active = newActiveAddresses
-    } else {
+    if (appState.isLeader()) {
       // Call the other method 'handleActiveAddressChange' from 'leader' instance
-      throw new Error(
+      // May be a recent change in leadership
+      logger.warn(
         'Leader needs to always accompany active_addresses change with "resolved_addresses" sync and broadcast to members'
       )
     }
+    this.serviceState.active = newActiveAddresses
   }
 
   /**
@@ -619,12 +651,13 @@ export class WebServiceManager {
    *
    * @memberof WebServiceManager
    */
-  public markHealthy() {
-    this.serviceState.status = WEB_SERVICE_STATUS.HEALTHY
+  public markHealthy(stateReceivedFromBroadcast: boolean) {
     this.resetAllHealthCheck()
     this.initiatePolling(this.healthyInterval * 1000)
-    if (appState.isLeader()) {
-      // Only leader maintains the web service 'status' ('healthy' OR 'unhealthy').
+    if (appState.isLeader() || !stateReceivedFromBroadcast) {
+      // !stateReceivedFromBroadcast indicates, the 'HEALTHY' state was arrived at by this instance as leader
+      // and needs to be broadcast, irrespective of whether it is a leader now or not
+      this.serviceState.status = WEB_SERVICE_STATUS.HEALTHY
       // Since the polling need to use 'healthy_interval' or 'unhealthy_interval' based on health 'status',
       // leader communicates the polling frequency required via this 'broadcast' to non-leader members
       appState.getSocketManager().broadcastChangePollingFreq(this, CHANGE_POLLING_FREQ_POLLING_TYPE.HEALTHY)
@@ -636,12 +669,13 @@ export class WebServiceManager {
    *
    * @memberof WebServiceManager
    */
-  public markUnHealthy() {
-    this.serviceState.status = WEB_SERVICE_STATUS.UN_HEALTHY
+  public markUnHealthy(stateReceivedFromBroadcast: boolean) {
     this.resetAllHealthCheck()
     this.initiatePolling(this.unhealthyInterval * 1000)
-    if (appState.isLeader()) {
-      // Only leader maintains the web service 'status' ('healthy' OR 'unhealthy').
+    if (appState.isLeader() || !stateReceivedFromBroadcast) {
+      // !stateReceivedFromBroadcast indicates, the 'UN_HEALTHY' state was arrived at by this instance as leader
+      // and needs to be broadcast, irrespective of whether it is a leader now or not
+      this.serviceState.status = WEB_SERVICE_STATUS.UN_HEALTHY
       // Since the polling need to use 'healthy_interval' or 'unhealthy_interval' based on health 'status',
       // leader communicates the polling frequency required via this 'broadcast' to non-leader members
       appState.getSocketManager().broadcastChangePollingFreq(this, CHANGE_POLLING_FREQ_POLLING_TYPE.UN_HEALTHY)
@@ -649,11 +683,10 @@ export class WebServiceManager {
   }
 
   public isFailOverInProgress() {
-    const result = (
+    const result =
       this.serviceState.failover_progress &&
       this.serviceState.failover_progress !== FAILOVER_PROGRESS.FAILOVER_COMPLETED &&
       this.serviceState.failover_progress !== FAILOVER_PROGRESS.FAILOVER_FAILED
-    )
     return !!result
   }
 
@@ -701,24 +734,34 @@ export class WebServiceManager {
       logger.info(this.logID, '<===============================================>')
       logger.info(this.logID, '<===============================================>')
       if (this.serviceState.failover_progress === FAILOVER_PROGRESS.DNS_UPDATED) {
-        if (this.serviceState.active[0] && webServiceHelper.verifyPassingAggreement(this, this.serviceState.active[0])) {
-          await notifyFailOverSucceeded(this, oldIpAddress, this.serviceState.active[0])
+        if (
+          this.serviceState.active[0] &&
+          webServiceHelper.verifyPassingAggreement(this, this.serviceState.active[0])
+        ) {
+          await appState
+            .getNotificationService()
+            .notifyFailOverSucceeded(this, oldIpAddress, [oldIpAddress], this.serviceState.active)
           this.updateFailOverProgress(FAILOVER_PROGRESS.FAILOVER_COMPLETED)
-          this.markHealthy()
+          this.markHealthy(false)
         } else {
-          await notifyFailOverFailed(
-            this,
-            oldIpAddress,
-            this.serviceState.active[0],
-            "Failover target not in 'passing' state, after cool down"
-          )
+          await appState
+            .getNotificationService()
+            .notifyFailOverFailed(
+              this,
+              oldIpAddress,
+              [oldIpAddress],
+              [this.serviceState.active[0]!],
+              "Failover target IP, not in 'passing' state, after cool down"
+            )
           this.updateFailOverProgress(FAILOVER_PROGRESS.FAILOVER_FAILED)
-          this.markUnHealthy()
+          this.markUnHealthy(false)
         }
       } else {
-        await notifyFailOverFailed(this, oldIpAddress, undefined, "Couldn't find a healthy target for failover")
+        await appState
+          .getNotificationService()
+          .notifyFailOverFailed(this, oldIpAddress, undefined, undefined, "Couldn't find a healthy target for failover")
         this.updateFailOverProgress(FAILOVER_PROGRESS.FAILOVER_FAILED)
-        this.markUnHealthy()
+        this.markUnHealthy(false)
       }
       // this.cleanUpPastFailOverProgressData()
       // notifyFailOverSucceeded(webService, ipAddress, failOverIPAddress)
@@ -745,8 +788,24 @@ export class WebServiceManager {
     this.serviceState.failover_progress_date_time = new Date()
   }
 
-  public getServiceDataForReporting() {
+  public getServiceDataForAPI() {
     return this.serviceState
+  }
+
+  public async reprocessAllRiseAndFallsForIPs() {
+    const logID = `${this.logID} reprocessAllRiseAndFallsForIPs:`
+    try {
+      const ipAddresses = this.serviceConf.addresses
+      for (const eachIpAddress of ipAddresses) {
+        if (webServiceHelper.verifyPassingAggreement(this, eachIpAddress)) {
+          await webServiceHelper.checkCombinedPeerStateAndInitiateAddActiveIP(this, eachIpAddress)
+        } else if (webServiceHelper.verifyFailingAggreement(this, eachIpAddress)) {
+          await webServiceHelper.checkCombinedPeerStateAndInitiateRemoveActiveIP(this, eachIpAddress)
+        }
+      }
+    } catch (e) {
+      logger.error(new Error(`${logID}:reprocessAllRiseAndFallsForIPs`, {cause: e}))
+    }
   }
 
   public toString() {

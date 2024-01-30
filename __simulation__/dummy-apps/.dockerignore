@@ -1,0 +1,11 @@
+.*ignore
+.env
+.git
+.github
+.gitlab-ci.yml
+.idea
+.pnpm-store
+dist
+Dockerfile
+node_modules
+README.md

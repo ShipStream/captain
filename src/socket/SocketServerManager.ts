@@ -2,13 +2,13 @@
  * Socket server that handles communication from other captains
  */
 
-import { type ServerOptions, type Socket as ServerSocket, Server as IOServer } from 'socket.io'
+import {type ServerOptions, type Socket as ServerSocket, Server as IOServer} from 'socket.io'
 import jwt from 'jsonwebtoken'
-import { EVENT_NAMES, SOCKET_SERVER_LOG_ID, closeGivenServer } from './captainSocketHelper.js'
-import { WebServiceManager } from '../web-service/webServiceManager.js'
+import {EVENT_NAMES, SOCKET_SERVER_LOG_ID, closeGivenServer} from './captainSocketHelper.js'
+import {WebServiceManager} from '../web-service/webServiceManager.js'
 import appConfig from '../appConfig.js'
 import appState from '../appState.js'
-import { logger } from '../coreUtils.js'
+import {logger} from '../coreUtils.js'
 
 /**
  * Transfer complete set of data, tracked by current 'captain' instance to the connecting 'peer'. Help nodes that could potentially join later
@@ -24,12 +24,7 @@ function transferCurrentState(socket: ServerSocket) {
   sendMyBulkHealthCheckUpdateToSocket(socket)
 }
 
-/**
- * Send 'active_addresses' of all web service to newly discovered 'captain'
- * Called only by 'leader'
- *
- */
-function sendBulkActiveAddressesToSocket(socket: ServerSocket) {
+function constructBulkActiveAddressesMessage() {
   const completeActiveAddresses = Object.keys(appState.webServices).map((eachServiceKey) => {
     const webService = appState.webServices[eachServiceKey]!
     return {
@@ -38,7 +33,16 @@ function sendBulkActiveAddressesToSocket(socket: ServerSocket) {
       addresses: webService.serviceState.active,
     }
   })
-  socket.emit(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, completeActiveAddresses)
+  return completeActiveAddresses
+}
+
+/**
+ * Send 'active_addresses' of all web service to newly discovered 'captain'
+ * Called only by 'leader'
+ *
+ */
+function sendBulkActiveAddressesToSocket(socket: ServerSocket) {
+  socket.emit(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, constructBulkActiveAddressesMessage())
 }
 
 /**
@@ -126,7 +130,10 @@ export class CaptainSocketServerManager {
     const logID = `${SOCKET_SERVER_LOG_ID}(From:${from})`
     logger.info(`${logID}: New connection: registerListeners`, {
       new: [socket.id, from],
-      all: (await this.io.fetchSockets()).map((eachSocket) => [eachSocket.id, eachSocket.handshake.query?.clientOrigin]),
+      all: (await this.io.fetchSockets()).map((eachSocket) => [
+        eachSocket.id,
+        eachSocket.handshake.query?.clientOrigin,
+      ]),
     })
     socket.onAnyOutgoing((event, args) => {
       logger.debug(`${logID}: onAnyOutgoing(${socket.handshake.address})`, event, JSON.stringify(args))
@@ -140,7 +147,6 @@ export class CaptainSocketServerManager {
    * Setup connection from clients ('peers')
    *
    * @export
-   * @param {IOServer} inputIO
    */
   private setupConnectionAndListeners() {
     // jwt based authentication for socket connections between captain members
@@ -195,9 +201,9 @@ export class CaptainSocketServerManager {
   }
 
   public async cleanUpForDeletion() {
-    try{
+    try {
       await closeGivenServer(this.io)
-    } catch(e) {
+    } catch (e) {
       logger.error(e)
     }
   }
@@ -292,4 +298,12 @@ export class CaptainSocketServerManager {
     })
   }
 
+  /**
+   * Send 'active_addresses' of all web service to all connected 'captain' peers
+   * Called only by 'leader'
+   *
+   */
+  public broadcastBulkActiveAddresses() {
+    this.io.emit(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, constructBulkActiveAddressesMessage())
+  }
 }

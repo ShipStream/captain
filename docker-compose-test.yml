@@ -1,5 +1,6 @@
 version: '3.7'
 services:
+
   # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
   dns-server:
     extends:
@@ -15,6 +16,8 @@ services:
       service: captain-template
     environment:
       - SELF_URL=ws://10.6.0.11:7400
+      # dummy consul
+      - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-1
     networks:
       custom-network:
         ipv4_address: 10.6.0.11

@@ -25,7 +25,7 @@ export class SocketClientManager {
   clientSocket: ClientSocket
   remoteCaptainUrl: string
 
-  private newLeader(payLoad: any) {
+  private receiveNewLeader(payLoad: any) {
     try {
       appState.setLeaderUrl(payLoad.new)
     } catch (e) {
@@ -37,7 +37,7 @@ export class SocketClientManager {
     }
   }
 
-  private activeAddresses(payLoad: any) {
+  private receiveActiveAddresses(payLoad: any) {
     try {
       const webServiceManager = appState.webServices[payLoad.serviceKey]!
       if (webServiceManager) {
@@ -46,7 +46,6 @@ export class SocketClientManager {
         logger.warn(`${this.logID}: activeAddresses: Unknown Service: %{payLoad.serviceKey}`)
       }
     } catch (e) {
-      console.error(e)
       logger.error(
         new Error(`${this.logID}: activeAddresses: Details: ${payLoad}`, {
           cause: e,
@@ -55,11 +54,11 @@ export class SocketClientManager {
     }
   }
 
-  private bulkActiveAddresses(payLoadArray: any) {
+  private receiveBulkActiveAddresses(payLoadArray: any) {
     try {
       // Array of active address payload
       for (const eachPayLoad of payLoadArray) {
-        this.activeAddresses(eachPayLoad)
+        this.receiveActiveAddresses(eachPayLoad)
       }
     } catch (e) {
       logger.error(
@@ -70,7 +69,7 @@ export class SocketClientManager {
     }
   }
 
-  private healthCheckRequest(payLoad: any) {
+  private receiveHealthCheckRequest(payLoad: any) {
     try {
       logger.info('healthCheckRequest', payLoad)
       const webServiceManager = appState.webServices[payLoad.serviceKey]!
@@ -94,15 +93,15 @@ export class SocketClientManager {
     }
   }
 
-  private changePollingFrequency(payLoad: any) {
+  private receiveChangePollingFrequency(payLoad: any) {
     try {
       logger.info('changePollingFrequency', payLoad)
       const webServiceManager = appState.webServices[payLoad.serviceKey]!
       if (webServiceManager) {
         if (payLoad.pollingType === CHANGE_POLLING_FREQ_POLLING_TYPE.HEALTHY) {
-          webServiceManager.markHealthy()
+          webServiceManager.markHealthy(true)
         } else if (payLoad.pollingType === CHANGE_POLLING_FREQ_POLLING_TYPE.UN_HEALTHY) {
-          webServiceManager.markUnHealthy()
+          webServiceManager.markUnHealthy(true)
         } else {
           logger.warn(`${this.logID}: changePollingFrequency: Unknown polling type`)
         }
@@ -118,7 +117,7 @@ export class SocketClientManager {
     }
   }
 
-  private healthCheckUpdate(payLoad: any) {
+  private receiveHealthCheckUpdate(payLoad: any) {
     try {
       // logger.info(`${logID}: healthCheckUpdate`, payLoad)
       const webServiceManager = appState.webServices[payLoad.serviceKey]!
@@ -172,10 +171,10 @@ export class SocketClientManager {
     }
   }
 
-  public bulkHealthCheckUpdate(payLoadArray: any) {
+  public receiveBulkHealthCheckUpdate(payLoadArray: any) {
     try {
       for (const eachPayLoad of payLoadArray) {
-        this.healthCheckUpdate(eachPayLoad)
+        this.receiveHealthCheckUpdate(eachPayLoad)
       }
     } catch (e) {
       logger.error(
@@ -187,13 +186,13 @@ export class SocketClientManager {
   }
 
   private async setupConnectionAndListeners() {
-    this.clientSocket.on(EVENT_NAMES.NEW_LEADER, (payLoad) => this.newLeader(payLoad))
-    this.clientSocket.on(EVENT_NAMES.ACTIVE_ADDRESSES, (payLoad) => this.activeAddresses(payLoad))
-    this.clientSocket.on(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, (payLoad) => this.bulkActiveAddresses(payLoad))
-    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_REQUEST, (payLoad) => this.healthCheckRequest(payLoad))
-    this.clientSocket.on(EVENT_NAMES.REQUEST_CHANGE_POLLING_FREQ, (payLoad) => this.changePollingFrequency(payLoad))
-    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_UPDATE, (payLoad) => this.healthCheckUpdate(payLoad))
-    this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, (payLoad) => this.bulkHealthCheckUpdate(payLoad))
+    this.clientSocket.on(EVENT_NAMES.NEW_LEADER, (payLoad) => this.receiveNewLeader(payLoad))
+    this.clientSocket.on(EVENT_NAMES.ACTIVE_ADDRESSES, (payLoad) => this.receiveActiveAddresses(payLoad))
+    this.clientSocket.on(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, (payLoad) => this.receiveBulkActiveAddresses(payLoad))
+    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_REQUEST, (payLoad) => this.receiveHealthCheckRequest(payLoad))
+    this.clientSocket.on(EVENT_NAMES.REQUEST_CHANGE_POLLING_FREQ, (payLoad) => this.receiveChangePollingFrequency(payLoad))
+    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_UPDATE, (payLoad) => this.receiveHealthCheckUpdate(payLoad))
+    this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, (payLoad) => this.receiveBulkHealthCheckUpdate(payLoad))
   }
 
   constructor(remoteCaptainUrl: string) {
