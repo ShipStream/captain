@@ -76,7 +76,7 @@ export class NotificationService {
     logger.info('datadog:postEvent', jsonResponse)
   }
 
-  constructSlaceMessage(input: {
+  constructSlackMessage(input: {
     zoneRecord: string
     success: boolean
     description: string
@@ -111,7 +111,7 @@ export class NotificationService {
       method: 'POST',
       body: JSON.stringify({
         channel: appConfig.SLACK_CHANNEL_ID,
-        text: this.constructSlaceMessage(input),
+        text: this.constructSlackMessage(input),
       }),
     })
     if (!jsonResponse.ok) {
@@ -246,7 +246,7 @@ export class NotificationService {
   }
 
   /**
-   * Factory to create captain socket server
+   * Factory to create the notification service
    */
   public static async createNotificationService() {
     const notificationService = new NotificationService()

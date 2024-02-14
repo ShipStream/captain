@@ -25,8 +25,8 @@ function transferCurrentState(socket: ServerSocket) {
 }
 
 function constructBulkActiveAddressesMessage() {
-  const completeActiveAddresses = Object.keys(appState.webServices).map((eachServiceKey) => {
-    const webService = appState.webServices[eachServiceKey]!
+  const completeActiveAddresses = Object.keys(appState.getWebServices()).map((eachServiceKey) => {
+    const webService = appState.getWebService(eachServiceKey)!
     return {
       serviceKey: webService.serviceKey,
       service: webService.serviceConf.name,
@@ -53,8 +53,8 @@ function sendBulkActiveAddressesToSocket(socket: ServerSocket) {
  */
 function sendMyBulkHealthCheckUpdateToSocket(socket: ServerSocket) {
   const bulkHealthCheckUpdates = []
-  for (const eachServiceKey of Object.keys(appState.webServices)) {
-    const webService = appState.webServices[eachServiceKey]!
+  for (const eachServiceKey of Object.keys(appState.getWebServices())) {
+    const webService = appState.getWebService(eachServiceKey)!
     const checksByEachCaptainMembers = webService.serviceState.checks[appConfig.SELF_URL]
     if (checksByEachCaptainMembers) {
       for (const eachIpAddress of Object.keys(checksByEachCaptainMembers)) {
@@ -82,8 +82,8 @@ function sendMyBulkHealthCheckUpdateToSocket(socket: ServerSocket) {
  */
 function sendCompleteBulkHealthCheckUpdateToSocket(socket: ServerSocket) {
   const bulkHealthCheckUpdates = []
-  for (const eachServiceKey of Object.keys(appState.webServices)) {
-    const webService = appState.webServices[eachServiceKey]!
+  for (const eachServiceKey of Object.keys(appState.getWebServices())) {
+    const webService = appState.getWebService(eachServiceKey)!
     for (const eachCaptainMemberUrl of Object.keys(webService.serviceState.checks)) {
       const checksByEachCaptainMembers = webService.serviceState.checks[eachCaptainMemberUrl]
       if (checksByEachCaptainMembers) {
@@ -119,6 +119,17 @@ function sendNewLeaderToSocket(socket: ServerSocket, leaderURL: string) {
 
 export class CaptainSocketServerManager {
   io!: IOServer
+  remoteCaptainUrlVsServerSocket: {
+    [key: string]: ServerSocket
+  } = {}
+
+
+  private async getSocketDetails() {
+    return (await this.io.fetchSockets()).map((eachSocket) => [
+      eachSocket.id,
+      eachSocket.handshake.query?.clientOrigin,
+    ])
+  }
 
   /**
    * Some basic listeners to log debugging messages about communication from this server
@@ -126,20 +137,29 @@ export class CaptainSocketServerManager {
    * @param {ServerSocket} socket
    */
   private async registerDebugListeners(socket: ServerSocket) {
-    const from = socket.handshake.query?.clientOrigin
-    const logID = `${SOCKET_SERVER_LOG_ID}(From:${from})`
+    const clientOrigin = socket.handshake.query?.clientOrigin
+    const logID = `${SOCKET_SERVER_LOG_ID}(Remote Client: ${clientOrigin})`
     logger.info(`${logID}: New connection: registerListeners`, {
-      new: [socket.id, from],
+      new: [socket.id, clientOrigin],
       all: (await this.io.fetchSockets()).map((eachSocket) => [
         eachSocket.id,
         eachSocket.handshake.query?.clientOrigin,
       ]),
     })
+    socket.on("disconnect", async (reason) => {
+      logger.info(logID, 'disconnect', {
+        reasonForDisconnection: reason,
+        remainingOpenConnections: await this.getSocketDetails(),        
+      })
+    });
+    socket.on("disconnecting", (reason) => {
+      logger.info(logID, 'disconnecting', reason)
+    });
     socket.onAnyOutgoing((event, args) => {
-      logger.debug(`${logID}: onAnyOutgoing(${socket.handshake.address})`, event, JSON.stringify(args))
+      logger.info(`${logID}: outgoingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
     })
     socket.onAny((event, args) => {
-      logger.debug(`${logID}: onAny(${socket.handshake.address})`, event, JSON.stringify(args))
+      logger.info(`${logID}: incomingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
     })
   }
 
@@ -150,7 +170,7 @@ export class CaptainSocketServerManager {
    */
   private setupConnectionAndListeners() {
     // jwt based authentication for socket connections between captain members
-    this.io.use(function (socket, next) {
+    this.io.use((socket, next) => {
       // const logID = `${SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address})`
       const token = `${socket.handshake.query?.token}`
       const clientOrigin = `${socket.handshake.query?.clientOrigin}`
@@ -161,6 +181,7 @@ export class CaptainSocketServerManager {
       } else {
         return next(new Error(`'clientOrigin' not set`))
       }
+      this.remoteCaptainUrlVsServerSocket[clientOrigin]=socket
       if (token) {
         jwt.verify(
           token,
@@ -235,7 +256,7 @@ export class CaptainSocketServerManager {
   }
 
   /**
-   * Only leader maintains the web service 'status' ('healthy' OR 'unhealthy').
+   * Only the leader maintains the web service 'status' ('healthy' OR 'unhealthy').
    * Since the polling need to use 'healthy_interval' or 'unhealthy_interval' based on health 'status',
    * leader communicates the polling frequency required via this 'broadcast' to non-leader members
    *
@@ -306,4 +327,44 @@ export class CaptainSocketServerManager {
   public broadcastBulkActiveAddresses() {
     this.io.emit(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, constructBulkActiveAddressesMessage())
   }
+
+  /**
+   * Re-broadcast 'new-remote-services' message from a 'mate' to to all connected 'captain' peers
+   * Called only by 'leader'
+   *
+   */
+  public broadcastNewRemoteServices(payLoad: any) {
+    this.io.emit(EVENT_NAMES.NEW_REMOTE_SERVICES, payLoad)
+  }
+
+  /**
+   * Send 'new-remote-services' message to the given captain by url
+   *
+   */
+  public sendNewRemoteServices(targetCaptainUrl: string, payLoad: any) {
+    logger.info('sendNewRemoteServices', {
+      targetCaptainUrl,
+      payLoad,
+      remoteCaptainUrlVsServerSocket: this.remoteCaptainUrlVsServerSocket,
+    })
+    this.remoteCaptainUrlVsServerSocket[targetCaptainUrl]!.emit(EVENT_NAMES.NEW_REMOTE_SERVICES, payLoad)
+  }
+
+  /**
+   * Re-broadcast 'mate-disconnected' message from a 'mate' to to all connected 'captain' peers
+   * Called only by 'leader'
+   *
+   */
+  public broadcastMateDisconnected(payLoad: any) {
+    this.io.emit(EVENT_NAMES.MATE_DISCONNECTED, payLoad)
+  }
+
+  /**
+   * Send 'mate-disconnected' message to the given captain by url
+   *
+   */
+  public sendMateDisconnected(targetCaptainUrl: string, payLoad: any) {
+    this.remoteCaptainUrlVsServerSocket[targetCaptainUrl]!.emit(EVENT_NAMES.MATE_DISCONNECTED, payLoad)
+  }
+
 }

@@ -15,5 +15,4 @@ docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk '{pri
 docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk '{print $1}'` curl -X POST http://localhost:80/consul-2/make-leader
 docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk '{print $1}'` curl -X POST http://localhost:80/consul-3/make-leader
 
-d).
-dig @127.0.0.1 -p 8600 consul.service.consul
+

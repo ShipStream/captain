@@ -55,6 +55,8 @@ export type typeWebServiceConf = {
   connect_timeout: number
   read_timeout: number
   cool_down: number
+  // remote (mate) service properties
+  is_remote: boolean
 }
 
 export type ipPassFailState = {
@@ -63,16 +65,25 @@ export type ipPassFailState = {
   last_update: Date | null
 }
 
+export type mateSpecificParamsType = {
+  addressses: string []
+  last_update: Date | null
+  is_orphan: boolean
+}
+
+export type checksStateType = {
+  [trackedByCaptainUrl: string]: {
+    [ipAddress: string]: ipPassFailState
+  }
+}
+
 export type typeWebServiceState = {
   // service: typeWebServiceConf,
-  is_remote: boolean
   is_orphan: boolean
-  mates: Array<any> | null
-  checks: {
-    [trackedByCaptainUrl: string]: {
-      [ipAddress: string]: ipPassFailState
-    }
+  mates?: {
+    [mateID: string]: mateSpecificParamsType
   }
+  checks: checksStateType,
   active: Array<string>
   status?: WEB_SERVICE_STATUS
   failover?: null
@@ -97,7 +108,7 @@ async function processWebServiceFileYAML() {
     // logger.info('processServiceFileYAML:2', {
     //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
     // });
-    await appState.registerWebServices(loadedYaml?.services)
+    await appState.registerLocalWebServices(loadedYaml?.services)
   } else {
     logger.info('processServiceFileYAML:2')
     throw new Error(`WebService YAML file location invalid: ${appConfig.WEBSERVICE_YAML_LOCATION}`)

@@ -19,6 +19,8 @@ services:
       - MEMBER_URLS=${MEMBER_URLS}
       - CAPTAIN_PORT=${CAPTAIN_PORT}
       - CAPTAIN_SECRET_KEY=${CAPTAIN_SECRET_KEY}
+      - MATE_PORT=${MATE_PORT}
+      - MATE_SECRET_KEY=${MATE_SECRET_KEY}
       - CONSUL_HTTP_TOKEN=${CONSUL_HTTP_TOKEN}
       - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
       - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
@@ -32,8 +34,6 @@ services:
       - .:/app
       - ./__simulation__/data:/data
       - /app/dist
-      - /app/.pnpm-store
-      - /app/node_modules
       - ./__simulation__/real-consul-app/certs/:/consul/config/certs/:ro
     entrypoint: ['sh', '-c']
     # command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
@@ -41,15 +41,49 @@ services:
     command:
       - |
         run-consul.sh
-        pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234
+        exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234
+
+  mate-template:
+    build:
+      context: ./../mate-app
+      target: develop-stage
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - KEEP_ALIVE=${__MATE__KEEP_ALIVE}
+      - INTERVAL=${__MATE__INTERVAL}
+      - CAPTAIN_SECRET_KEY=${__MATE__CAPTAIN_SECRET_KEY}
+    volumes:
+      - ./../mate-app:/app
+      - ./../mate-app/__simulation__/data:/data
+      - /app/dist
+    entrypoint: ['sh', '-c']
+    # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
 
   dummy-apps:
     build:
       context: ./__simulation__/dummy-apps
+    volumes:
+      - ./__simulation__/dummy-apps:/app
+      - /app/dist
     environment:
       - NODE_ENV=${NODE_ENV}
     entrypoint: ['sh', '-c']
-    command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    cap_add:
+      - NET_ADMIN
+    # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+
+  dummy-apps-web:
+    extends:
+      service: dummy-apps
+    volumes:
+      # link the relevant source as src/index.ts
+      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
+    depends_on:
+      dummy-apps-install-packages:
+        condition: service_completed_successfully
+  
 
   # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
   dns-server-template:

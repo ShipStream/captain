@@ -36,7 +36,7 @@
       "src/**/*.test.ts"
     ],
     "ext": "ts,mjs,js,json,graphql",
-    "exec": "tsc -p tsconfig.json && node ./dist/index.js",
+    "exec": "tsc -p tsconfig.json && node ./dist/src/index.js",
     "legacyWatch": true
   }
 }

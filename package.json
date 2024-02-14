@@ -12,7 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "test": "echo \"Use 'npm run docker:test'\" && exit 1",
     "jest-exec": "jest --detectOpenHandles --forceExit",
-    "docker:dev": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans -d",
+    "docker:dev": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans",
     "docker:dev:attach": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans",
     "docker:dev:stop": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev stop",
     "docker:dev:kill": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev kill --remove-orphans",

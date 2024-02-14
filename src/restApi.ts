@@ -5,11 +5,30 @@ import {Application, NextFunction, Request, Response, Router, json} from 'expres
 
 const router = Router()
 
+router.get('/service/:service', json(), async (req, res) => {
+  const serviceKey = req.params.service
+  const serviceData = await appState.getWebService(serviceKey)?.getServiceDataForAPI()
+  if (serviceData) {
+    res.json(serviceData)
+  } else {
+    res.status(503).json({Message: `Service: "${serviceKey}" could not be found in the system`})
+  }
+})
+
 router.get('/services', json(), async (req, res) => {
-  const services = Object.keys(appState.webServices).map((eachKey) => {
-    return appState.webServices[eachKey]?.getServiceDataForAPI()
+  const servicesPromise = Object.keys(appState.getWebServices()).map((eachKey) => {
+    return appState.getWebService(eachKey)?.getServiceDataForAPI()
   })
+  const services = await Promise.all(servicesPromise)
   res.json(services)
+})
+
+router.get('/status', json(), async (req, res) => {
+  res.json({
+    members: [...appConfig.MEMBER_URLS],
+    leader: appState.getLeaderUrl(),
+    services: Object.values(appState.getWebServices() || []).map((eachService) => eachService.serviceName)
+  })
 })
 
 export async function setupExpress(app: Application) {

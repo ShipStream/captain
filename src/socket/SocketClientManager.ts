@@ -11,7 +11,7 @@ import webServiceHelper, {
   HEALTH_CHECK_REQUEST_VERIFY_STATE,
   CHANGE_POLLING_FREQ_POLLING_TYPE,
 } from '../web-service/webServiceHelper.js'
-import { logger } from '../coreUtils.js'
+import { logger, processMateDisconnection } from '../coreUtils.js'
 
 /**
  * Register listener for listening to 'gossip' from other captain 'peers'
@@ -39,7 +39,7 @@ export class SocketClientManager {
 
   private receiveActiveAddresses(payLoad: any) {
     try {
-      const webServiceManager = appState.webServices[payLoad.serviceKey]!
+      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
       if (webServiceManager) {
         webServiceManager.setActiveAddresses(payLoad.addresses)
       } else {
@@ -72,7 +72,7 @@ export class SocketClientManager {
   private receiveHealthCheckRequest(payLoad: any) {
     try {
       logger.info('healthCheckRequest', payLoad)
-      const webServiceManager = appState.webServices[payLoad.serviceKey]!
+      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
       if (webServiceManager) {
         if (payLoad.verifyState === HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING) {
           webServiceManager.resetHealthCheckByIPToVerifyPassing(payLoad.address)
@@ -96,7 +96,7 @@ export class SocketClientManager {
   private receiveChangePollingFrequency(payLoad: any) {
     try {
       logger.info('changePollingFrequency', payLoad)
-      const webServiceManager = appState.webServices[payLoad.serviceKey]!
+      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
       if (webServiceManager) {
         if (payLoad.pollingType === CHANGE_POLLING_FREQ_POLLING_TYPE.HEALTHY) {
           webServiceManager.markHealthy(true)
@@ -120,7 +120,7 @@ export class SocketClientManager {
   private receiveHealthCheckUpdate(payLoad: any) {
     try {
       // logger.info(`${logID}: healthCheckUpdate`, payLoad)
-      const webServiceManager = appState.webServices[payLoad.serviceKey]!
+      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
       if (webServiceManager) {
         // Skip own data from 'other' memebers, usually in case of bulkHealthCheckUpdate
         if (payLoad.member !== appConfig.SELF_URL) {
@@ -171,7 +171,7 @@ export class SocketClientManager {
     }
   }
 
-  public receiveBulkHealthCheckUpdate(payLoadArray: any) {
+  private receiveBulkHealthCheckUpdate(payLoadArray: any) {
     try {
       for (const eachPayLoad of payLoadArray) {
         this.receiveHealthCheckUpdate(eachPayLoad)
@@ -179,6 +179,65 @@ export class SocketClientManager {
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: bulkHealthCheckUpdate: Details: ${payLoadArray}`, {
+          cause: e,
+        })
+      )
+    }
+  }
+
+  /**
+   * Receive re-broadcast/re-sending of 'new-remote-services' from fellow 'captain' ( received originally from a 'mate' )
+   *
+   * @private
+   * @param {*} payLoad
+   * @memberof SocketClientManager
+   */
+  private receiveNewRemoteServices(payLoad: any) {
+    try {
+      logger.info(this.logID, 'receiveNewRemoteServices')
+      appState.registerRemoteMateWebServices(payLoad.message_id, payLoad.mate_id, payLoad.services).catch((e) => {
+        logger.error(
+          new Error(`${this.logID}: receiveNewRemoteServices: registerGivenMateWebServices: Details: ${payLoad}`, {
+            cause: e,
+          })
+        )  
+      })
+      if (appState.isLeader()) {
+        // Case 'leader', copy of mate payload received from a captain 'peer' directly to leader.
+        // The 'leader' needs to broadcast to all captain 'peers'
+        appState.getSocketManager().broadcastNewRemoteServices(payLoad)
+      }
+    } catch (e) {
+      logger.error(
+        new Error(`${this.logID}: receiveNewRemoteServices: Details: ${payLoad}`, {
+          cause: e,
+        })
+      )
+    }
+  }
+
+  /**
+   * Receive re-broadcast/re-sending of 'mate-disconnected' from fellow 'captain'
+   *
+   * @private
+   * @param {*} payLoad
+   * @memberof SocketClientManager
+   */
+  private async receiveMateDisconnected(payLoad: any) {
+    try {
+      const mateID = payLoad.mate_id
+      logger.info(this.logID, mateID, 'receiveMateDisconnected')
+      await processMateDisconnection(mateID)      
+      if (appState.isLeader() || !appState.getLeaderUrl()) { 
+        // Case a). 'leader', re-broadcast to captain 'peers'
+        // case b). 'no leader elected', re-broadcast to captain 'peers'
+        appState.getSocketManager().broadcastMateDisconnected({
+          mate_id: mateID
+        })
+      }
+    } catch (e) {
+      logger.error(
+        new Error(`${this.logID}: receiveMateDisconnected: Details: ${payLoad}`, {
           cause: e,
         })
       )
@@ -193,6 +252,8 @@ export class SocketClientManager {
     this.clientSocket.on(EVENT_NAMES.REQUEST_CHANGE_POLLING_FREQ, (payLoad) => this.receiveChangePollingFrequency(payLoad))
     this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_UPDATE, (payLoad) => this.receiveHealthCheckUpdate(payLoad))
     this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, (payLoad) => this.receiveBulkHealthCheckUpdate(payLoad))
+    this.clientSocket.on(EVENT_NAMES.NEW_REMOTE_SERVICES, (payLoad) => this.receiveNewRemoteServices(payLoad))
+    this.clientSocket.on(EVENT_NAMES.MATE_DISCONNECTED, (payLoad) => this.receiveMateDisconnected(payLoad))
   }
 
   constructor(remoteCaptainUrl: string) {
@@ -214,7 +275,7 @@ export class SocketClientManager {
   public static async createCaptainSocketClient(remoteCaptainUrl: string) {
     const captainSocketServer = new SocketClientManager(remoteCaptainUrl)
     await captainSocketServer.setupConnectionAndListeners()
-    await registerClientDebugListeners(captainSocketServer.clientSocket, appConfig.SELF_URL, remoteCaptainUrl)
+    await registerClientDebugListeners(captainSocketServer.clientSocket, remoteCaptainUrl)
     return captainSocketServer
   }
 }

@@ -38,6 +38,8 @@ export function processAppEnvironement() {
       SELF_URL: Joi.string().required().description('SELF_URL'),
       CAPTAIN_PORT: Joi.number().description('CAPTAIN_PORT').default(7400),
       CAPTAIN_SECRET_KEY: Joi.string().required().description('CAPTAIN_SECRET_KEY'),
+      MATE_PORT: Joi.number().description('MATE_PORT').default(7450),
+      MATE_SECRET_KEY: Joi.string().required().description('MATE_SECRET_KEY'),
       CONSUL_HTTP_ADDR: Joi.string().optional().description('CONSUL_HTTP_ADDR'),
       CONSUL_HTTP_TOKEN: Joi.string().optional().description('CONSUL_HTTP_TOKEN'),
       CONSUL_LEADER_INTERVAL: Joi.number().description('CONSUL_LEADER_INTERVAL').default(5),

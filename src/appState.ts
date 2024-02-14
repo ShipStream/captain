@@ -10,49 +10,140 @@ import { SOCKET_CLIENT_LOG_ID } from './socket/captainSocketHelper.js'
 import { SocketClientManager } from './socket/SocketClientManager.js'
 import { ConsulService } from './ConsulService.js'
 import { NotificationService } from './NotificationService.js'
+import { MateSocketServerManager } from './socket/MateSocketServerManager.js'
 
 class AppState {
   // 'State' (Hash) of all web services.
   // Using zone record as unique key.
-  webServices: {
+  private _webServices: {
     [key: string]: WebServiceManager
   } = {}
 
+  deleteWebService(serviceKey: string) {
+    const oldWebService = this._webServices[serviceKey]
+    if (oldWebService) {
+      oldWebService.cleanUpForDeletion()
+      delete this._webServices[serviceKey]
+    }
+  }
+
   /**
+   * Register the given webservice reference into the system
+   * If old service data exists, it will be cleaned and replace with new one
+   *
+   * @param {WebServiceManager} webService
+   * @memberof AppState
+   */
+  setWebService(webService: WebServiceManager) {
+    // If service is already registered, delete old one and register with the new configuration
+    const serviceKey = webService.serviceKey
+    if (this._webServices[serviceKey]) {
+      this.deleteWebService(serviceKey)
+    }
+    this._webServices[serviceKey] = webService
+  }
+
+  getWebService(key: string) {
+    return this._webServices[key]
+  }
+
+  getWebServices() {
+    return this._webServices
+  }
+
+  /**
+   * Process 'static' set of web services received read from services YAML
    * Initiate a manager ('WebServiceManager') for each 'web service' to be managed by the 'captain'.
    * Store 'instance' into global state.
    * @export
    * @param {typeWebServiceConf []} serviceConfs
    */
-  async registerWebServices(serviceConfs: typeWebServiceConf[]) {
+  async registerLocalWebServices(serviceConfs: typeWebServiceConf[]) {
     const registerServicePromises = []
     for (const serviceConf of serviceConfs) {
-      registerServicePromises.push(WebServiceManager.createWebService(serviceConf).then((webService: WebServiceManager) => {
-        this.webServices[webService.serviceKey] = webService
-      }))
+      registerServicePromises.push(
+        WebServiceManager.createLocalWebService(serviceConf).then((webService: WebServiceManager) => {
+          this.setWebService(webService)
+        })
+      )
     }
     await Promise.all(registerServicePromises)
   }
 
-  constructor() {
-    // Output 'state' for debugging
-    // setInterval(() => {
-    //   logger.info(
-    //     'appState:webServices',
-    //     JSON.stringify(
-    //       Object.keys(this.webServices).map((eachKey) => {
-    //         return this.webServices[eachKey]?.serviceState
-    //       }),
-    //       undefined,
-    //       2
-    //     )
-    //   )
-    //   logger.info('appState:leader', {
-    //     'getLeaderUrl()': this.getLeaderUrl(),
-    //     'isLeader()': this.isLeader(),
-    //   })
-    // }, 5000)
+  // Processing all mate services is an expensive operation and hence using message_id key to avoid reprocessing
+  processedRemoteMessages: {[key: string]: number} = {}
+  // Cleanup handler for above object 'processedRemoteMessages'
+  initCleanUpProcessedMessageIDTracker() {
+    setInterval(() => {
+      const messageIDKeys = Object.keys(this.processedRemoteMessages)
+      for (const eachMessageID of messageIDKeys) {
+        const processingTime = this.processedRemoteMessages[eachMessageID]!
+        const timePassedInSeconds = (Date.now() - processingTime) / 1000
+        if (timePassedInSeconds > 900) {
+          //15 mintues older, delete to free up memory
+          delete this.processedRemoteMessages[eachMessageID]
+          console.log('cleanupMessageTracker', {eachMessageID, timePassedInSeconds})
+        }
+      }
+    }, 60 * 1000)
   }
+
+  async createOrMergeRemoteWebService(mateID: string, serviceConf: typeWebServiceConf) {
+    // Multiple mate could simultaneously report data for same service. So avoid parallel processing with the help of locks
+    let raceCondLock
+    try {
+      const serviceKey = serviceConf.zone_record
+      raceCondLock = await appState.getRaceHandler().getLock(`createRemoteWebService:${serviceKey}`, 90 * 1000)
+      if (this.getWebService(serviceKey)) {
+        // Service already exists, so merge configuration instead of creating new service
+        const existingService = this.getWebService(serviceKey)!
+        return existingService.mergeWebServiceConf(mateID, serviceConf)
+      } else {
+        return WebServiceManager.createRemoteWebService(mateID, serviceConf).then((webService: WebServiceManager) => {
+          this.setWebService(webService)
+        })
+      }
+    } finally {
+      appState.getRaceHandler().releaseLock(raceCondLock)
+    }
+  }
+
+  /**
+   * Process additional dynamic sets of web services received from accompanying 'mates'
+   * Initiate a manager ('WebServiceManager') for each 'web service' to be managed by the 'captain'.
+   * Store 'instance' into global state.
+   * @export
+   * @param {typeWebServiceConf []} serviceConfs
+   */
+  async registerRemoteMateWebServices(messageID: string, mateID: string, serviceConfs: typeWebServiceConf[]) {
+    logger.info('registerRemoteMateWebServices', {
+      messageID,
+      mateID,
+      serviceConfs,
+      lastProcessed: this.processedRemoteMessages[messageID],
+    })
+    // Check and do processing only if it is not already processed
+    if (!this.processedRemoteMessages[messageID]) {
+      const processingDateTime = Date.now()
+      logger.info('registerRemoteMateWebServices:processing', {messageID, processingDateTime})
+      this.processedRemoteMessages[messageID] = processingDateTime
+      const registerServicePromises = []
+      for (const serviceConf of serviceConfs) {
+        registerServicePromises.push(this.createOrMergeRemoteWebService(mateID, serviceConf))
+      }
+      await Promise.all(registerServicePromises)
+    } else {
+      logger.info('registerRemoteMateWebServices:already processed', {
+        messageID,
+        mateID,
+      })
+    }
+  }
+
+  constructor() {
+    this.initCleanUpProcessedMessageIDTracker()
+  }
+
   // Maintain 'state' about leader of the 'captains'
   leaderURL?: string
 
@@ -74,10 +165,15 @@ class AppState {
     return this.leaderURL === appConfig.SELF_URL
   }
 
-  socketManager!: CaptainSocketServerManager
+  _socketManager!: CaptainSocketServerManager
+
+  setSocketManager(newSocketManager: CaptainSocketServerManager) {
+    this._socketManager?.cleanUpForDeletion() // cleanup old manager if it exists
+    this._socketManager = newSocketManager
+  }
 
   getSocketManager() {
-    return this.socketManager
+    return this._socketManager
   }
 
   /**
@@ -89,30 +185,80 @@ class AppState {
    * @param {Partial<ServerOptions>} [options]
    */
   async registerCaptainSocketServer(port: number, options?: Partial<ServerOptions>) {
-    this.socketManager = await CaptainSocketServerManager.createCaptainSocketServer(port, options)
+    const newSocketManager = await CaptainSocketServerManager.createCaptainSocketServer(port, options)
+    this.setSocketManager(newSocketManager)
   }
 
-  remoteCaptainUrlVsClientSocketManager: {
+  _mateSocketManager!: MateSocketServerManager
+
+  setMateSocketManager(newSocketManager: MateSocketServerManager) {
+    this._mateSocketManager?.cleanUpForDeletion() // cleanup old manager if it exists
+    this._mateSocketManager = newSocketManager
+  }
+
+  getMateSocketManager() {
+    return this._mateSocketManager
+  }
+
+  /**
+   * Create a socket server for communication from mates
+   * Initialize and store the socket 'instance' into global state.
+   *
+   * @export
+   * @param {number} port
+   * @param {Partial<ServerOptions>} [options]
+   */
+  async registerMateSocketServer(port: number, options?: Partial<ServerOptions>) {
+    const newMateSocketManager = await MateSocketServerManager.createMateSocketServer(port, options)
+    this.setMateSocketManager(newMateSocketManager)
+  }
+
+  _remoteCaptainUrlVsClientSocketManager: {
     [key: string]: SocketClientManager
   } = {}
-  
+
+  deleteClientSocketManagerByRemoteUrl(remoteCaptainUrl: string) {
+    const oldClientSocketManager = this._remoteCaptainUrlVsClientSocketManager[remoteCaptainUrl]
+    if (oldClientSocketManager) {
+      oldClientSocketManager?.cleanUpForDeletion()
+      delete this._remoteCaptainUrlVsClientSocketManager[remoteCaptainUrl]
+    }
+  }
+
+  getClientSocketManagerByRemoteUrl(remoteCaptainUrl: string) {
+    return this._remoteCaptainUrlVsClientSocketManager[remoteCaptainUrl]
+  }
+
+  setClientSocketManagerForRemoteUrl(remoteCaptainUrl: string, clientSocketManager: SocketClientManager) {
+    // Cleanup old connection with the given remote captain if exists
+    this.deleteClientSocketManagerByRemoteUrl(remoteCaptainUrl)
+    this._remoteCaptainUrlVsClientSocketManager[remoteCaptainUrl] = clientSocketManager
+  }
+
+  getAllClientSocketManagers() {
+    return this._remoteCaptainUrlVsClientSocketManager
+  }
+
   async connectWithOtherCaptains(otherCaptains: string[]) {
     try {
       logger.info(`${SOCKET_CLIENT_LOG_ID}: connectWithOtherCaptains`, otherCaptains)
 
       const clientSocketManagerPromises = []
       for (const eachCaptainUrl of otherCaptains) {
-        clientSocketManagerPromises.push(SocketClientManager.createCaptainSocketClient(eachCaptainUrl).then((socketClientManager: SocketClientManager) => {
-          this.remoteCaptainUrlVsClientSocketManager[eachCaptainUrl] = socketClientManager
-        }).catch((e: any) => {
-          logger.error(
-            new Error(
-              `${SOCKET_CLIENT_LOG_ID}: error with connectAndRegisterListenerWithOtherCaptain: ${eachCaptainUrl}`,
-              { cause: e }
-            )
-          )
-          throw e
-        }))
+        clientSocketManagerPromises.push(
+          SocketClientManager.createCaptainSocketClient(eachCaptainUrl)
+            .then((socketClientManager: SocketClientManager) => {
+              this.setClientSocketManagerForRemoteUrl(eachCaptainUrl, socketClientManager)
+            })
+            .catch((e: any) => {
+              const error = new Error(
+                `${SOCKET_CLIENT_LOG_ID}: error with connectAndRegisterListenerWithOtherCaptain: ${eachCaptainUrl}`,
+                {cause: e}
+              )
+              logger.error(error)
+              throw error
+            })
+        )
       }
       await Promise.all(clientSocketManagerPromises)
     } catch (e) {
@@ -123,7 +269,7 @@ class AppState {
       )
     }
   }
-  
+
   raceHandler!: CustomRaceConditionLock
 
   getRaceHandler() {
@@ -134,6 +280,9 @@ class AppState {
    * Create a CustomRaceConditionLock
    */
   async registerRaceHandler() {
+    if (this.raceHandler) {
+      this.raceHandler.cleanUpForDeletion()
+    }
     this.raceHandler = new CustomRaceConditionLock()
   }
 
@@ -144,7 +293,7 @@ class AppState {
   }
 
   async registerConsulService() {
-    this.consulService = await ConsulService.createConsulService()  
+    this.consulService = await ConsulService.createConsulService()
   }
 
   notificationService!: NotificationService
@@ -154,32 +303,35 @@ class AppState {
   }
 
   async registerNotificationService() {
-    this.notificationService = await NotificationService.createNotificationService()  
+    this.notificationService = await NotificationService.createNotificationService()
   }
 
-  async resetAppState({ resetSockets, resetWebApps, resetLockHandlers, resetLeaderShip }: { resetSockets: boolean, resetWebApps: boolean, resetLockHandlers: boolean, resetLeaderShip: boolean }) {
+  async resetAppState({
+    resetSockets,
+    resetWebApps,
+    resetLockHandlers,
+    resetLeaderShip,
+  }: {
+    resetSockets: boolean
+    resetWebApps: boolean
+    resetLockHandlers: boolean
+    resetLeaderShip: boolean
+  }) {
     if (resetSockets) {
       // console.log('softReloadApp:Step1:terminate socket server connections')
       await appState.getSocketManager().cleanUpForDeletion()
       // console.log('softReloadApp:Step2:terminate socket client connections')
-      const remoteCaptains = Object.keys(appState.remoteCaptainUrlVsClientSocketManager)
-      const remoteCaptainUrlVsClientSocketManager = appState.remoteCaptainUrlVsClientSocketManager
+      const remoteCaptains = Object.keys(appState.getAllClientSocketManagers())
       for (const eachRemoteCaptainUrl of remoteCaptains) {
         // console.log('softReloadApp:eachRemoteCaptainUrl', eachRemoteCaptainUrl)
-        const eachClientSocketManager = remoteCaptainUrlVsClientSocketManager[eachRemoteCaptainUrl]
-        eachClientSocketManager?.cleanUpForDeletion()
-        delete remoteCaptainUrlVsClientSocketManager[eachRemoteCaptainUrl]
+        this.deleteClientSocketManagerByRemoteUrl(eachRemoteCaptainUrl)
       }
     }
     if (resetWebApps) {
       // console.log('softReloadApp:Step3:delete all webservices')
-      const webServicesKeys = Object.keys(appState.webServices)
-      const webServices = appState.webServices
+      const webServicesKeys = Object.keys(appState.getWebServices())
       for (const eachServiceKey of webServicesKeys) {
-        // console.log('softReloadApp:eachServiceKey', eachServiceKey)
-        const eachWebService = webServices[eachServiceKey]
-        eachWebService?.cleanUpForDeletion()
-        delete webServices[eachServiceKey]
+        this.deleteWebService(eachServiceKey)
       }
     }
     if (resetLockHandlers) {

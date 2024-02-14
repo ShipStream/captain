@@ -112,6 +112,13 @@ async function resolvedAddresses(zoneRecord: string): Promise<string[]> {
  */
 async function addZoneRecord(zoneRecordName: string, ipAddress: string) {
   logger.info(`Received add zone record request`, {zoneRecordName, ipAddress})
+  if (!`${zoneRecordName}`.endsWith(await getDomainName())) {
+    // This helps avoid any auto conversion and programmatic/api errors.
+    // For example if we use 'helpdesk.example.cm' by mistake instead of 'helpdesk.example.com', it will auto convert to 'helpdesk.example.cm.example.com' and leads to errors
+    throw new Error(
+      `zone_record: ${zoneRecordName} doesn't end with the domain name: ${await getDomainName()}. 'zone_record' of service needs to fully qualified and shouldn't be a prefix.`
+    )
+  }
   const data = {
     name: zoneRecordName,
     content: ipAddress,
@@ -150,6 +157,13 @@ async function addZoneRecordMulti(zoneRecord: string, ipAddresses: string[]) {
  */
 async function removeZoneRecord(zoneRecord: string, ipAddress: string) {
   logger.info(`Received remove zone record request`, {zoneRecord, address: ipAddress})
+  if (!`${zoneRecord}`.endsWith(await getDomainName())) {
+    // This helps avoid any auto conversion and programmatic/api errors.
+    // For example if we use 'helpdesk.example.cm' by mistake instead of 'helpdesk.example.com', it will auto convert to 'helpdesk.example.cm.example.com' and leads to errors
+    throw new Error(
+      `zone_record: ${zoneRecord} doesn't end with the domain name: ${await getDomainName()}. 'zone_record' of service needs to fully qualified and shouldn't be a prefix.`
+    )
+  }
   const resolvedAddressesResponse = await getAllPagesOfDnsRecords({
     name: zoneRecord,
     type: 'A',
@@ -176,6 +190,28 @@ async function removeZoneRecordMulti(zoneRecord: string, ipAddresses: string[]):
   await Promise.all(ipAddresses.map((eachIpAddress) => removeZoneRecord(zoneRecord, eachIpAddress)))
 }
 
+let zoneDetails: any = undefined
+
+async function resetCache() {
+  zoneDetails = undefined
+}
+
+async function getZoneDetails() {
+  if (!zoneDetails) {
+    zoneDetails = await customFetch('', {
+      method: 'get',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+  }
+  return zoneDetails
+}
+
+async function getDomainName() {
+  return zoneDetails?.result?.name;
+}
+
 /**
  * Custom validation/setup, specific for each dns provider
  */
@@ -183,14 +219,11 @@ async function validateDnsConf() {
   if (!appState.isLeader()) {
     logger.warn('Dns initialized on non-leader.')
   }
+  // reset cache to enable live refetch of zone data
+  resetCache()
   // fetch zone details to test connection and auth
-  const zoneDetails = await customFetch('', {
-    method: 'get',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  })
-  logger.info('validateDnsConf', {zoneDetails: zoneDetails?.result})
+  const latestZoneData = await getZoneDetails()
+  logger.info('validateDnsConf', {zoneData: latestZoneData?.result})
 }
 
 const cloudflareDnsManager: DnsManager = {

@@ -9,9 +9,12 @@ import webServiceHelper, {
   ipPassFailState,
   typeWebServiceConf,
   typeWebServiceState,
+  checksStateType,
+  mateSpecificParamsType,
 } from './webServiceHelper.js'
 import http from 'http'
 import https from 'https'
+import { nanoid } from 'nanoid'
 import {logger} from './../coreUtils.js'
 
 /**
@@ -20,6 +23,9 @@ import {logger} from './../coreUtils.js'
  * @class WebServiceManager
  */
 export class WebServiceManager {
+  // Unique ID to help debugging purpose
+  uniqueID: string
+
   /**
    * Holds web service configuration as read from /data/services.yaml for this specific web service
    *
@@ -54,6 +60,10 @@ export class WebServiceManager {
     return this.serviceConf.zone_record
   }
 
+  public get serviceName() {
+    return this.serviceConf.name
+  }
+
   get unhealthyInterval(): number {
     return this.serviceConf.unhealthy_interval || appConfig.DEFAULT_HEALTHY_INTERVAL
   }
@@ -83,7 +93,7 @@ export class WebServiceManager {
   }
 
   get logID() {
-    return `SERVICE: ${this.serviceConf.name}(${this.serviceConf.zone_record}):`
+    return `SERVICE(${this.uniqueID}): ${this.serviceConf.name}(${this.serviceConf.zone_record}):`
   }
 
   get pollLogID() {
@@ -133,23 +143,36 @@ export class WebServiceManager {
     End of 'Basic getters and setters'
   */
 
-  private constructor(serviceConf: typeWebServiceConf) {
+  mergeChecksData(newChecks: checksStateType) {
+    for (const eachMember of Object.keys(newChecks)) {
+      this.serviceState.checks[eachMember] = {
+        ...(this.serviceState.checks[eachMember] || {}),
+        ...(newChecks[eachMember] || {}),
+      }
+    }
+  }
+
+  constructInitialChecksData(ipAddresses: string[]): checksStateType {
     const currentDateTime = new Date()
-    this.serviceConf = serviceConf
+    return {
+      [appConfig.SELF_URL]: ipAddresses.reduce((accumulator: any, eachAddress: string) => {
+        accumulator[eachAddress] = {
+          failing: 0,
+          passing: 0,
+          last_update: currentDateTime,
+        }
+        return accumulator
+      }, {}),
+    }
+  }
+
+  private constructor(serviceConf: typeWebServiceConf, isRemote: boolean = false) {
+    this.uniqueID = `ID:${nanoid(12)}-${new Date().toISOString()}`
+    this.serviceConf = {...serviceConf, is_remote: isRemote}
     this.serviceState = {
-      is_remote: false,
       is_orphan: false,
-      mates: null,
-      checks: {
-        [appConfig.SELF_URL]: serviceConf.addresses.reduce((accumulator: any, eachAddress: string) => {
-          accumulator[eachAddress] = {
-            failing: 0,
-            passing: 0,
-            last_update: currentDateTime,
-          }
-          return accumulator
-        }, {}),
-      },
+      mates: undefined,
+      checks: this.constructInitialChecksData(serviceConf.addresses),
       active: [], // will be set after initial Dns update query
     }
     if (appState.isLeader()) {
@@ -172,9 +195,21 @@ export class WebServiceManager {
     })
   }
 
-  // Factory to create webservice
-  public static async createWebService(serviceConf: typeWebServiceConf) {
-    const webService = new WebServiceManager(serviceConf)
+  // Factory to create webservice for static services defined in service YAML
+  public static async createLocalWebService(serviceConf: typeWebServiceConf) {
+    const webService = new WebServiceManager(serviceConf, false)
+    await webService.initialize()
+    return webService
+  }
+
+  // Factory to create webservice for dynamic services received from 'mates'
+  public static async createRemoteWebService(mateID: string, serviceConf: typeWebServiceConf) {
+    const webService = new WebServiceManager(serviceConf, true)
+    webService.createMateParameters(mateID, {
+      addressses: serviceConf.addresses,
+      last_update: new Date(),
+      is_orphan: false,
+    })
     await webService.initialize()
     return webService
   }
@@ -190,6 +225,7 @@ export class WebServiceManager {
    * @memberof WebServiceManager
    */
   public async pollSuccess(pollLogID: string, ipAddress: string) {
+    // polling has been reset
     if (pollLogID !== this.pollLogID) {
       return
     }
@@ -198,7 +234,7 @@ export class WebServiceManager {
     try {
       logger.info(eachIPLogID, 'POLL-SUCCESS')
       const stats = this.getChecksDataByCurrentCaptainInstance()[ipAddress]!
-      // logger.info(eachIPLogID, 'POLL-SUCCESS', 'STATS:BEFORE', stats)
+      // logger.debug(eachIPLogID, 'POLL-SUCCESS', 'STATS:BEFORE', stats)
       stats.last_update = new Date()
       let checkAndInitiateAddToActive = false
       if (stats.failing) {
@@ -215,7 +251,7 @@ export class WebServiceManager {
           stats.passing += 1
           if (stats.passing === this.rise) {
             // we reached 'rise' value
-            logger.info(eachIPLogID, 'POLL-SUCCESS', 'ALERT-REACHED-RISE')
+            logger.warn(eachIPLogID, 'POLL-SUCCESS', 'ALERT-REACHED-RISE')
             checkAndInitiateAddToActive = true
           }
         } else {
@@ -243,6 +279,7 @@ export class WebServiceManager {
    * @memberof WebServiceManager
    */
   public async pollFailed(pollLogID: string, ipAddress: string) {
+    // polling has been reset
     if (pollLogID !== this.pollLogID) {
       return
     }
@@ -251,7 +288,7 @@ export class WebServiceManager {
     try {
       logger.info(eachIPLogID, 'POLL-FAILED')
       const stats = this.getChecksDataByCurrentCaptainInstance()[ipAddress]!
-      // logger.info(eachIPLogID, 'POLL-FAILED', 'STATS:BEFORE', stats)
+      // logger.debug(eachIPLogID, 'POLL-FAILED', 'STATS:BEFORE', stats)
       stats.last_update = new Date()
       let checkAndInitiateRemoveFromActive = false
       if (stats.passing) {
@@ -268,7 +305,7 @@ export class WebServiceManager {
           stats.failing += 1
           if (stats.failing === this.fall) {
             // we reached 'fall' value
-            logger.info(eachIPLogID, 'POLL-FAILED', 'ALERT-REACHED-FALL')
+            logger.warn(eachIPLogID, 'POLL-FAILED', 'ALERT-REACHED-FALL')
             checkAndInitiateRemoveFromActive = true
           }
         } else {
@@ -343,7 +380,7 @@ export class WebServiceManager {
             setTimeout(async () => {
               // responseReadTimedOut processing
               if (!timeOutParams.responseFinished) {
-                logger.info(`${timeID}:responseReadTimedOut: Seconds: ${(Date.now() - startTime) / 1000}s`)
+                logger.debug(`${timeID}:responseReadTimedOut: Seconds: ${(Date.now() - startTime) / 1000}s`)
                 if (!timeOutParams.statusProcessed) {
                   timeOutParams.statusProcessed = true
                   await this.pollFailed(pollLogID, ipAddress)
@@ -368,10 +405,10 @@ export class WebServiceManager {
           }
         )
         .on('error', async (_e) => {
-          logger.info(`${eachIPLogID}:error`, _e?.message || _e)
+          logger.debug(`${eachIPLogID}:error`, _e?.message || _e)
           if (!timeOutParams.statusProcessed) {
             timeOutParams.statusProcessed = true
-            logger.info(`${timeID}:error: Seconds: ${(Date.now() - startTime) / 1000}s`)
+            logger.debug(`${timeID}:error: Seconds: ${(Date.now() - startTime) / 1000}s`)
             await this.pollFailed(pollLogID, ipAddress)
           }
         })
@@ -380,7 +417,7 @@ export class WebServiceManager {
           if (!timeOutParams.connEstablished) {
             if (!timeOutParams.statusProcessed) {
               timeOutParams.statusProcessed = true
-              logger.info(`${timeID}:connTimedOut: Seconds: ${(Date.now() - startTime) / 1000}s`)
+              logger.debug(`${timeID}:connTimedOut: Seconds: ${(Date.now() - startTime) / 1000}s`)
               await this.pollFailed(pollLogID, ipAddress)
             }
           }
@@ -392,13 +429,13 @@ export class WebServiceManager {
   }
 
   /**
-   * Simultaneously initiate 'polling' for all available addresses
+   * Simultaneously initiate 'polling' for all given addresses
    *
    * @memberof WebServiceManager
    */
-  async pollAllAddresses(pollLogID: string) {
+  async pollGivenAddresses(pollLogID: string, ipAddresses: string[]) {
     try {
-      const ipAddresses = this.serviceConf.addresses
+      logger.info(pollLogID, 'pollGivenAddresses', ipAddresses)
       await Promise.all(
         ipAddresses.map((eachIPAddress: string) =>
           this.pollEachAddress(pollLogID, eachIPAddress).catch((e) => {
@@ -412,6 +449,16 @@ export class WebServiceManager {
   }
 
   /**
+   * Simultaneously initiate 'polling' for all available addresses
+   *
+   * @memberof WebServiceManager
+   */
+  async pollAllAddresses(pollLogID: string) {
+    const ipAddresses = this.serviceConf.addresses
+    await this.pollGivenAddresses(pollLogID, ipAddresses)
+  }
+
+  /**
    * Initiate/re-initiate web service address polling.
    * Can be called again to use as 'ReInitiate' polling
    *
@@ -419,17 +466,19 @@ export class WebServiceManager {
    * @memberof WebServiceManager
    */
   initiatePolling(inputIntervalInMs: number) {
-    logger.info(`${this.logID}:initiatePolling:`, inputIntervalInMs)
+    logger.debug(`${this.logID}:initiatePolling:`, inputIntervalInMs)
     this._activePollID = `POLL_ID_${Date.now()}_${++this._initiatePollCounter}_every_${inputIntervalInMs}`
     // cleanup old poll timer
-    if (this._pollLoopReference) {
-      clearInterval(this._pollLoopReference)
-    }
+    this.cleanUpPollingInterval()
 
     // initiate new polling
     this._pollLoopReference = setInterval(() => {
       logger.debug(this.pollLogID, 'POLLING:ALL')
-      this.pollAllAddresses(this.pollLogID)
+      if (this.serviceConf.is_remote) {
+        this.handlePollingForRemoteServices(this.pollLogID)
+      } else {
+        this.pollAllAddresses(this.pollLogID)
+      }
     }, inputIntervalInMs)
   }
 
@@ -464,7 +513,7 @@ export class WebServiceManager {
       const availableResolvedAddresses = availableAddresses.filter((eachIpAddress) =>
         resolvedAddresses.includes(eachIpAddress)
       )
-      logger.info('<===========initialResolvedAndActiveAddressSync============>', {
+      logger.debug('<===========initialResolvedAndActiveAddressSync============>', {
         availableResolvedAddresses,
       })
       if (availableResolvedAddresses?.[0]) {
@@ -475,25 +524,7 @@ export class WebServiceManager {
         newActiveAddresses = [availableAddresses[0]!]
       }
     }
-    await this.handleActiveAddressChange(newActiveAddresses).then(() => {
-      // if (newActiveAddresses?.length === 1) {
-      //   this.handleActiveAddressChange(['10.5.0.22']).catch((e: any) => {
-      //     console.error(e)
-      //   })
-      //   setTimeout(() => {
-      //     this.handleActiveAddressChange(['10.5.0.22', '10.5.0.23']).catch((e: any) => {
-      //       console.error(e)
-      //     })
-      //     this.handleActiveAddressChange(['10.5.0.23']).catch((e: any) => {
-      //       console.error(e)
-      //     })
-      //   }, 2000)
-      // } else {
-      //   this.handleActiveAddressChange(newActiveAddresses.reverse()).catch((e: any) => {
-      //     console.error(e)
-      //   })
-      // }
-    })
+    await this.handleActiveAddressChange(newActiveAddresses)
   }
 
   /**
@@ -529,7 +560,7 @@ export class WebServiceManager {
     const addressesToBeDeleted = knownResolvedAddresses.filter((eachIPAddres: string) => {
       return !newActiveAddresses.includes(eachIPAddres)
     })
-    logger.info('handleActiveAddressChange', {
+    logger.debug('handleActiveAddressChange', {
       newActiveAddresses,
       resolvedAddresses,
       knownAddresses,
@@ -596,15 +627,15 @@ export class WebServiceManager {
     const stats = this.getChecksDataByCurrentCaptainInstance()[ipAddress]!
     if (stats.passing >= this.rise || stats.failing >= this.fall) {
       this.resetHealthCheckByIP(ipAddress)
-      logger.info(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'SUCCESS (reason: beyond "fall" or "rise")')
+      logger.debug(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'SUCCESS (reason: beyond "fall" or "rise")')
     } else if (stats.failing) {
       this.resetHealthCheckByIP(ipAddress)
-      logger.info(
+      logger.debug(
         `${this.logID}: resetHealthCheckByIP: ${ipAddress}`,
         'SUCCESS (reason: change in "failing" to "passing")'
       )
     } else {
-      logger.info(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'IGNORED', stats)
+      logger.debug(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'IGNORED', stats)
     }
   }
 
@@ -619,15 +650,15 @@ export class WebServiceManager {
     const stats = this.getChecksDataByCurrentCaptainInstance()[ipAddress]!
     if (stats.passing >= this.rise || stats.failing >= this.fall) {
       this.resetHealthCheckByIP(ipAddress)
-      logger.info(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'SUCCESS (reason: beyond "fall" or "rise")')
+      logger.debug(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'SUCCESS (reason: beyond "fall" or "rise")')
     } else if (stats.passing) {
       this.resetHealthCheckByIP(ipAddress)
-      logger.info(
+      logger.debug(
         `${this.logID}: resetHealthCheckByIP: ${ipAddress}`,
         'SUCCESS (reason: change in "passing" to "failing")'
       )
     } else {
-      logger.info(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'IGNORED', stats)
+      logger.debug(`${this.logID}: resetHealthCheckByIP: ${ipAddress}`, 'IGNORED', stats)
     }
   }
 
@@ -788,8 +819,43 @@ export class WebServiceManager {
     this.serviceState.failover_progress_date_time = new Date()
   }
 
-  public getServiceDataForAPI() {
-    return this.serviceState
+  public async getServiceDataForAPI() {
+    const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)    
+    const checks: any = {}
+    let allIps: string [] = []
+    //Go through all captains because, it is possible for checks to be missing for a particular ip in one or other captain if the service is just starting    
+    Object.values(this.serviceState.checks).forEach((eachCaptainData) => {
+      allIps.push(...Object.keys(eachCaptainData)) //ips are the keys
+    })
+    allIps = [...new Set([...allIps])] // remove duplicates
+    //Construct combined checks data
+    for(const eachIP of allIps) {
+      const ipData = {
+        passing: 0,
+        failing: 0,
+      }
+      for(const eachRemoteCaptain of Object.keys(this.serviceState.checks)) {
+        const eachCaptainData = this.serviceState.checks[eachRemoteCaptain]
+        if (eachCaptainData?.[eachIP]?.passing) {
+          ipData.passing += 1
+        } else if(eachCaptainData?.[eachIP]?.failing) {
+          ipData.failing += 1
+        }
+      }
+      checks[eachIP] = ipData
+    }
+    return {
+      name: this.serviceName,
+      description: this.serviceConf.description,
+      tags: this.serviceConf.tags,
+      zone_record: this.serviceConf.zone_record,
+      check_protocol: this.serviceConf.check.protocol,
+      check_hostname: this.serviceConf.check.host,
+      resolved_addresses: resolvedAddresses,
+      active_addresses: this.serviceState.active,
+      checks,
+      status: this.serviceState.status,
+    }
   }
 
   public async reprocessAllRiseAndFallsForIPs() {
@@ -812,14 +878,159 @@ export class WebServiceManager {
     return `${this.logID}:${JSON.stringify(this.serviceKey)}`
   }
 
-  public cleanUpForDeletion() {
+  cleanUpPollingInterval() {
     if (this._pollLoopReference) {
       clearInterval(this._pollLoopReference)
     }
+  }
+
+  cleanUpFailoverCoolDown() {
     if (this._failOverCoolDownLoopReference) {
       clearTimeout(this._failOverCoolDownLoopReference)
     }
   }
+
+  public cleanUpForDeletion() {
+    this.cleanUpPollingInterval()
+    this.cleanUpFailoverCoolDown()
+  }
+  /* 
+    End of 'Member funtions'
+  */
+
+  /* 
+    Start of remote services(mate) based 'Member funtions'
+  */
+
+  /**
+   * For mate/remote services, to re-sync ips with dns provider and restart the cancelled polling if needed.
+   *
+   * @memberof WebServiceManager
+   */
+  async reInitiate() {
+    if (this.serviceConf.is_remote) {
+      if (appState.isLeader()) {
+        await this.initialResolvedAndActiveAddressSync()
+      }
+      this.restartPolling()
+    } else {
+      throw new Error('"reInitiate" is designed for remote/mate services. Not to be called from local services')
+    }
+  }
+
+  /**
+   * For mate/remote services, to restart the cancelled polling
+   *
+   * @memberof WebServiceManager
+   */
+  async restartPolling() {
+    this.initiatePolling(this.healthyInterval * 1000)
+  }
+
+  /**
+   * Decides on subset/all of ips to be polled for remote/mate services based on set of criteria's
+   */
+  getIpsToBePolled(): string[] | undefined {
+    // Is service mate managed and not orphan, then captain needs to do only checks until fall/rise
+    // if (this.serviceConf.is_remote && !this.serviceState.is_orphan) {
+    if (this.serviceConf.is_remote) {
+      const checks = this.getChecksDataByCurrentCaptainInstance()
+      const ipsWithNeitherFallNorRise = this.serviceConf.addresses.filter((eachIpAddress) => {
+        const checkDataForIp = checks[eachIpAddress]!
+        if (checkDataForIp && (checkDataForIp.failing >= this.fall || checkDataForIp.passing >= this.rise)) {
+          return false
+        }
+        return true
+      })
+      const ipsOrphaned = []
+      for (const eachMateID of Object.keys(this.serviceState.mates || {})) {
+        const mateParams = this.serviceState.mates![eachMateID]!
+        if (mateParams.is_orphan) {
+          ipsOrphaned.push(...mateParams.addressses)
+        }
+      }
+      // Remove duplicates using 'Set'
+      return [...new Set([...ipsWithNeitherFallNorRise, ...ipsOrphaned])]
+    }
+    return undefined
+  }
+
+  /**
+   * For remote/mate services, polling is not done constantly.
+   * Captain does polling only during initial rise/fall only (OR) when orphaned
+   *
+   * @memberof WebServiceManager
+   */
+  async handlePollingForRemoteServices(pollLogID: string) {
+    const ipsToBePolled = this.getIpsToBePolled()
+    if (ipsToBePolled?.length) {
+      await this.pollGivenAddresses(pollLogID, ipsToBePolled)
+    } else {
+      // Indicates that all ips have reached rise/fall and are not orphaned.
+      // Cancel polling by clearing the timer as no ip requires polling.
+      logger.info(pollLogID, 'Cancel polling by clearing the timer as no ip requires polling.')
+      this.cleanUpPollingInterval()
+    }
+  }
+
+  /**
+   * Additional serviceConf data to be merged into existing service
+   * @param {string} mateID
+   * @param {typeWebServiceConf} newServiceConf
+   * @memberof AppState
+   */
+  mergeWebServiceConf(mateID: string, newServiceConf: typeWebServiceConf) {
+    if (this.serviceConf.is_remote) {
+      // Merge public ips
+      const addresses = this.serviceConf.addresses || []
+      for (const eachNewIP of newServiceConf.addresses) {
+        if (!addresses.includes(eachNewIP)) {
+          addresses.push(eachNewIP)
+        }
+      }
+      // Give configuration priority to new data
+      this.serviceConf = {
+        ...this.serviceConf,
+        ...newServiceConf,
+        addresses,
+      }
+      logger.info(this.logID, 'mergeWebServiceConf:2', this.serviceState.checks)
+      this.mergeChecksData(this.constructInitialChecksData(newServiceConf.addresses))
+      this.createMateParameters(mateID, {
+        addressses: newServiceConf.addresses,
+        last_update: new Date(),
+        is_orphan: false,
+      })
+      logger.info(this.logID, 'mergeWebServiceConf:3', this.serviceState.checks)
+      this.reInitiate()
+      return this
+    } else {
+      throw new Error('Service configuration "merging" supported only for remote services')
+    }
+  }
+
+  /**
+   * Does the service monitors this mate data
+   *
+   * @param {string} mateID
+   * @return {*}  {boolean}
+   * @memberof WebServiceManager
+   */
+  containsMate(mateID: string): boolean {
+    return !!this.serviceState.mates?.[mateID]
+  }
+
+  createMateParameters(mateID: string, mateParams: mateSpecificParamsType) {
+    this.serviceState.mates = this.serviceState.mates || {} // initialize if needed
+    this.serviceState.mates[mateID] = {...mateParams}
+  }
+
+  updateMateParameters(mateID: string, mateParams: Partial<mateSpecificParamsType>) {
+    if (this.serviceState.mates?.[mateID]) {
+      this.serviceState.mates[mateID] = {...this.serviceState.mates[mateID], ...mateParams} as any
+    }
+  }
+
   /* 
     End of 'Member funtions'
   */

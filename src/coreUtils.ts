@@ -100,13 +100,14 @@ export async function promoteThisCaptainToLeader() {
   // b). Leader needs to do ensure initial zone records are set for the service
   logger.info('promoteThisCaptainToLeader', 'syncResolvedAddresses')
   const syncResolvedAddressesPromises: Promise<any>[] = []
-  for (const webServiceKey of Object.keys(appState.webServices)) {
+  const webServiceKeys = Object.keys(appState.getWebServices())
+  for (const webServiceKey of webServiceKeys) {
     // health and failover stats are maintained only by the leader
     //TODO verify that things can be initialized on every leader elected
     // (OR) needs to broadcast these stats too and mintain it on all peers so that need not be initialized on being elected
     // Potentially, could retrigger failover and notification again in the new leader too.
-    appState.webServices[webServiceKey]!.initializeHealthAndFailoverStats()
-    syncResolvedAddressesPromises.push(appState.webServices[webServiceKey]!.initialResolvedAndActiveAddressSync())
+    appState.getWebService(webServiceKey)!.initializeHealthAndFailoverStats()
+    syncResolvedAddressesPromises.push(appState.getWebService(webServiceKey)!.initialResolvedAndActiveAddressSync())
   }
   await Promise.all(syncResolvedAddressesPromises)
   // Already done inside 'handleActiveAddressChange' for each webservice !!
@@ -117,8 +118,8 @@ export async function promoteThisCaptainToLeader() {
   // So re-process every rise and falls now
   logger.info('promoteThisCaptainToLeader', 'reprocessRiseAndFalls')
   const reprocessRiseAndFallPromises: Promise<any>[] = []
-  for (const webServiceKey of Object.keys(appState.webServices)) {
-    reprocessRiseAndFallPromises.push(appState.webServices[webServiceKey]!.reprocessAllRiseAndFallsForIPs())
+  for (const webServiceKey of Object.keys(appState.getWebServices())) {
+    reprocessRiseAndFallPromises.push(appState.getWebService(webServiceKey)!.reprocessAllRiseAndFallsForIPs())
   }
   await Promise.all(reprocessRiseAndFallPromises)
 }
@@ -133,6 +134,7 @@ export async function markGivenRemoteCaptainAsLeader(remoteLeaderURL: string) {
 }
 
 export async function initializeAppModules() {
+  await initializeDnsManager()  
   await appState.registerRaceHandler()
   await appState.registerNotificationService()
   await appState.registerCaptainSocketServer(appConfig.CAPTAIN_PORT, {
@@ -149,6 +151,10 @@ export async function initializeAppModules() {
     // alternate leader election ( first URL is the captain )
     await checkAndPromoteToLeader()
   }
+  // Mate operations is dependent on leadership, so initialize after leader selection above.
+  await appState.registerMateSocketServer(appConfig.MATE_PORT, {
+    /* options */
+  })
 }
 
 /**
@@ -161,6 +167,27 @@ export async function softReloadApp() {
   await initializeAppModules()
 }
 
+/**
+ * Get all services belonging to the mate and 'mark' them as orphan and let captain take over polling
+ *
+ * @export
+ */
+export async function processMateDisconnection(mateID: string) {
+  const logID = `processMateDisconnection:${mateID}`
+  logger.info(logID)
+  const allServices = appState.getWebServices()
+  for(const eachService of Object.values(allServices)) {
+    if (eachService.serviceConf.is_remote && eachService.containsMate(mateID)) {
+      logger.info(logID, eachService.serviceKey)
+      eachService.updateMateParameters(mateID, {
+        is_orphan: true,
+        last_update: new Date()
+      })
+      eachService.restartPolling()
+    }
+  }
+}
+
 /*
  * Helps avoid race-condition.
  * Uses 100ms intervals to check for released lock
@@ -171,7 +198,7 @@ export class CustomRaceConditionLock {
   lockedKeys: any
 
   // Max wait time before error out, obtaining lock
-  static lockWaitTimeoutDuration = 30000 // 30 seconds
+  static lockWaitTimeoutDuration = 30 * 1000 // 30 seconds
 
   // min-lock-hold-guarantee after which, any cleanup task may release the lock.
   static minLockHoldGuarantee = 1000 * 60 * 15 // 15 minute
@@ -201,7 +228,7 @@ export class CustomRaceConditionLock {
     }, CustomRaceConditionLock.cleanUpHandlerInterval)
   }
 
-  async getLock(key: string): Promise<any[]> {
+  async getLock(key: string, lockWaitTimeoutDuration: number = CustomRaceConditionLock.lockWaitTimeoutDuration): Promise<any[]> {
     return new Promise((resolve, reject) => {
       const startTime = Date.now()
       const checkLock = () => {
@@ -215,7 +242,7 @@ export class CustomRaceConditionLock {
           resolve(lockInstance) // return tuple of key and lock-obtained-time
         } else {
           const elapsedTime = Date.now() - startTime
-          if (elapsedTime < CustomRaceConditionLock.lockWaitTimeoutDuration) {
+          if (elapsedTime < lockWaitTimeoutDuration) {
             setTimeout(checkLock, 100)
           } else {
             reject(new Error(CustomRaceConditionLock.failedToObtainLockErrMsg))
