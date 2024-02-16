@@ -2,7 +2,7 @@ version: '3.7'
 services:
   captain-template:
     build:
-      context: .
+      context: captain
       target: develop-stage
     # env_file:
     #   - .env
@@ -31,7 +31,7 @@ services:
       - NOTIFICATION_URL=${NOTIFICATION_URL}
       - NOTIFICATION_HEADER=${NOTIFICATION_HEADER}
     volumes:
-      - .:/app
+      - ./captain:/app
       - ./__simulation__/data:/data
       - /app/dist
       - ./__simulation__/real-consul-app/certs/:/consul/config/certs/:ro
@@ -45,7 +45,7 @@ services:
 
   mate-template:
     build:
-      context: ./../mate-app
+      context: mate
       target: develop-stage
     environment:
       - NODE_ENV=${NODE_ENV}
@@ -53,8 +53,8 @@ services:
       - INTERVAL=${__MATE__INTERVAL}
       - CAPTAIN_SECRET_KEY=${__MATE__CAPTAIN_SECRET_KEY}
     volumes:
-      - ./../mate-app:/app
-      - ./../mate-app/__simulation__/data:/data
+      - ./mate:/app
+      - ./__simulation__/data:/data
       - /app/dist
     entrypoint: ['sh', '-c']
     # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']

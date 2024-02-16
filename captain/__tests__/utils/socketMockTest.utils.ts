@@ -7,7 +7,7 @@ import {
   registerClientDebugListeners,
 } from '../../src/socket/captainSocketHelper.js'
 import appConfig from '../../src/appConfig.js'
-import {WebServiceManager} from 'web-service/webServiceManager.js'
+import {type WebServiceManager} from '../../src/web-service/webServiceManager.js'
 
 // Socket.io servers of the remote captain peers
 const ioServers: {[key: string]: IOServer} = {}
@@ -41,11 +41,11 @@ export class MockSocketClientManager {
     this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, this.bulkHealthCheckUpdate)
   }
 
-  public static async createMockSocketClient(targetServerUrl: string, clientCaptainUrl: string) {
-    const captainSocketServer = new MockSocketClientManager(targetServerUrl, clientCaptainUrl)
-    captainSocketServer.setupConnectionAndListeners()
-    await registerClientDebugListeners(captainSocketServer.clientSocket, targetServerUrl, clientCaptainUrl)
-    return captainSocketServer
+  public static async createMockSocketClient(mainCaptainUnderTest: string, eachCaptainUrl: string) {
+    const captainSocketClientManager = new MockSocketClientManager(mainCaptainUnderTest, eachCaptainUrl)
+    captainSocketClientManager.setupConnectionAndListeners()
+    await registerClientDebugListeners(captainSocketClientManager.clientSocket, eachCaptainUrl)
+    return captainSocketClientManager
   }
 
   cleanUpForDeletion() {
@@ -134,7 +134,7 @@ function receiveHealthCheckUpdateBroadcastFromPeer(
 
 const receive = {
   healthCheckUpdateBroadcastFromAllPeers: receiveHealthCheckUpdateBroadcastFromAllPeers,
-  healthCheckUpdateBroadcastFromPeer: receiveHealthCheckUpdateBroadcastFromAllPeers,
+  healthCheckUpdateBroadcastFromPeer: receiveHealthCheckUpdateBroadcastFromPeer,
 }
 
 async function clearRemoteCaptains() {

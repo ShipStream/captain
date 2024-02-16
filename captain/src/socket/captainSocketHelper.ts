@@ -18,6 +18,7 @@ export const EVENT_NAMES = {
 
 export const MATE_EVENT_NAMES = {
   NEW_REMOTE_SERVICES: 'new-remote-services',
+  SERVICE_STATE_CHANGE: 'service-state-change',
 }
 
 export const SOCKET_SERVER_LOG_ID = 'CAPTAIN-SOCKET-SERVER'

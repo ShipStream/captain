@@ -1,0 +1,6 @@
+.env
+node_modules
+.idea
+README.md
+package*.json
+pnpm-lock.yaml

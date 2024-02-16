@@ -76,23 +76,23 @@ describe('Tests. Primary/Common', () => {
 
   test('Checks for healthy ip reaches "rise"', async () => {
     // By default all ips have '200' response, so no additional 'req' mock needed
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     await higherOrderUtil.waitForPollToRise(webService, targetIP)
   })
   test('Checks for unHealthy ip reaches "fall"', async () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     await higherOrderUtil.waitForPollToFall(webService, targetIP)
   })
   test('Case: In Disaggrement: Verification/aggreement of checks with all remote captain peers needed for declaring an ip as "passing"/"failing"', async () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     await higherOrderUtil.waitForPollToFall(webService, targetIP)
     await higherOrderUtil.FAIL_waitForFailOverInit(webService, targetIP)
   })
   test('Case: All in aggrement: Verification/aggreement of checks with all remote captain peers needed for declaring an ip as "passing"/"failing"', async () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
@@ -112,7 +112,7 @@ describe('Tests. Primary/Common', () => {
   })
   test('Verification/aggreement of checks with all remote captain peers needed for finding "replacement ip" for "failover"', async () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
@@ -126,7 +126,7 @@ describe('Tests. Primary/Common', () => {
     await higherOrderUtil.FAIL_verifyActiveAndResolvedContain(webService, remainingIPs[0]!)
   })
   test('Reaching "rise"/"fall" needed for declaring an ip as "passing"/"failing"', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([remainingIPs[0]!]))
     await higherOrderUtil.waitForPollFailureCount(webService, remainingIPs[0]!, 1)
@@ -145,7 +145,7 @@ describe('Tests. Primary/Common', () => {
     }
   })
   test('Captain peers are kept in sync. Service checks "state" broadcast to all remote peers', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     // Test all remote-peer clients for not-having received 'healthCheckNotification' notification
     for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
@@ -165,7 +165,7 @@ describe('Tests. Primary/Common', () => {
   })
   test('Service checks "reset" to "zero" on change in health state of an "ip"', async () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     await higherOrderUtil.waitForPollToFall(webService, targetIP)
     // change 'failing' to 'passing'
     requestMockUtil.getMswServer().use(...requestMockUtil.passingResponses([targetIP]))
@@ -174,7 +174,7 @@ describe('Tests. Primary/Common', () => {
   })
   test('Service checks "reset" when needed is always broadcast to all remote peers', async () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     await higherOrderUtil.waitForPollToFall(webService, targetIP)
     // change 'failing' to 'passing'
     requestMockUtil.getMswServer().use(...requestMockUtil.passingResponses([targetIP]))
@@ -218,7 +218,7 @@ describe('Tests Custom. Primary/Common', () => {
     // initialize dns manager to verify resolved address, won't be auto initialized, as this is not a leader instance for this test
     initializeDnsManager()
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
@@ -249,7 +249,7 @@ describe('Tests. With multi=false', () => {
   })
 
   test('Case: No-DnsEntry. On bootstrap, first ip from services.yaml, set as activeAddress and updated to dns-provider', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const firstIP = webService.serviceConf?.addresses?.[0]
     const targetActiveAddresses = [firstIP!]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
@@ -257,7 +257,7 @@ describe('Tests. With multi=false', () => {
   test('Detected unHealthy,active "ip" and initiate failover with the available healthy "ip"', async () => {
     const targetIP = '10.5.0.21'
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([targetIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const healthyFailoverIP = remainingIPs[0]!
@@ -280,7 +280,7 @@ describe('Tests. With multi=false', () => {
   })
   test('Detected unHealthy,active "ip" but failover available at a later point but before "failover" cooldown', async () => {
     const targetIP = '10.5.0.21'
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const laterHealthyFailoverIP = remainingIPs[0]!
@@ -314,7 +314,7 @@ describe('Tests. With multi=false', () => {
   })
   test('Case: Service transition from "healthy" to "unhealthy". Detected unHealthy,active "ip" but no failover "ip" available. Service marked "unhealthy" but zonerecords retained', async () => {
     const targetIP = '10.5.0.21'
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const laterHealthyFailoverIP = remainingIPs[0]!
@@ -337,7 +337,7 @@ describe('Tests. With multi=false', () => {
   test('Case: Service transition from "unhealthy" to "healthy". Detected unHealthy,active "ip" but failover available at a later point (after failover cooldown and "failed" notification)', async () => {
     //transition to unhealthy
     const targetIP = '10.5.0.21'
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const laterHealthyFailoverIP = remainingIPs[0]!
@@ -384,7 +384,7 @@ describe('Tests Custom. With multi=false', () => {
     await appTestUtil.beforeTestAppInitializer({
       existingDnsRecords: [{zoneRecord: zoneRecord, ipAddresses: [targetIP]}],
     })
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const targetActiveAddresses = [targetIP]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
@@ -393,7 +393,7 @@ describe('Tests Custom. With multi=false', () => {
     await appTestUtil.beforeTestAppInitializer({
       existingDnsRecords: [{zoneRecord: zoneRecord, ipAddresses: [unknownIP]}],
     })
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const firstIP = webService.serviceConf?.addresses?.[0]
     const targetActiveAddresses = [firstIP!]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
@@ -409,12 +409,12 @@ describe('Tests. With multi=true', () => {
   })
 
   test('Case: No-DnsEntries. On Bootstrap, all ips from services.yaml, set as activeAddresses and updated to dns-provider', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
   test('Detect unHealthy, active "ip" and remove from activeAddresses and also the zone records', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const unHealthyIP = webService.serviceConf?.addresses?.[0]!
     let targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
@@ -431,7 +431,7 @@ describe('Tests. With multi=true', () => {
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
   test('Remain healthy as long as atleast one active ip remains', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const unHealthyIPs = webService.serviceConf?.addresses?.slice(1)
     let targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
@@ -458,7 +458,7 @@ describe('Tests. With multi=true', () => {
     expect(webService.serviceState.status).toBe(WebServiceHelper.WEB_SERVICE_STATUS.HEALTHY)
   })
   test('Detect healthy, non-active "ip" and add to activeAddresses and also to zone records', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const unHealthyIP1 = webService.serviceConf?.addresses?.[0]!
     const unHealthyIP2 = webService.serviceConf?.addresses?.[1]!
     let unHealthyIPs = [unHealthyIP1, unHealthyIP2]
@@ -501,7 +501,7 @@ describe('Tests. With multi=true', () => {
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
   test('Case: Service transition from "healthy" to "unhealthy". All active ips become unhealthy. Service marked "unhealthy" but the last one "ip" retained in zone records', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const unHealthyIPs = webService.serviceConf?.addresses?.slice(0)
     let targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
@@ -525,7 +525,7 @@ describe('Tests. With multi=true', () => {
     await higherOrderUtil.verifyActiveAndResolvedAddressCount(webService, 1, false)
   })
   test('Case: Service transition from "unhealthy" to "healthy". Healthy "ips" become available one by one and everything gets added to activeAddress list and also to zone records', async () => {
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const unHealthyIPs = webService.serviceConf?.addresses?.slice(0)
     let targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
@@ -577,7 +577,7 @@ describe('Tests Custom. With multi=true', () => {
     await appTestUtil.beforeTestAppInitializer({
       existingDnsRecords: [{zoneRecord: zoneRecord, ipAddresses: [targetIP]}],
     })
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
@@ -587,7 +587,7 @@ describe('Tests Custom. With multi=true', () => {
     await appTestUtil.beforeTestAppInitializer({
       existingDnsRecords: [{zoneRecord: zoneRecord, ipAddresses: [unKnownTargetIP1, unKnownTargetIP2]}],
     })
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.waitForAddressChangeInit(webService, targetActiveAddresses)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
@@ -599,7 +599,7 @@ describe('Tests Custom. With multi=true', () => {
     await appTestUtil.beforeTestAppInitializer({
       existingDnsRecords: [{zoneRecord: zoneRecord, ipAddresses: [knownTargetIP1, unKnownTargetIP2]}],
     })
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const targetActiveAddresses = [...webService.serviceConf?.addresses]
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
@@ -619,7 +619,7 @@ describe('Notification tests', () => {
   test('Success Notifications. Detected unHealthy,active "ip" and initiate failover with the available healthy "ip"', async () => {
     const firstAndActiveIP = '10.5.0.21' // firstIP set as active on startup, so it is already active
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([firstAndActiveIP]))
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== firstAndActiveIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const healthyFailoverIP = remainingIPs[0]!
@@ -646,7 +646,7 @@ describe('Notification tests', () => {
 
   test('Failure Notifications. Service transition from "healthy" to "unhealthy". Detected unHealthy,active "ip" but no failover "ip" available. Service marked "unhealthy" but zonerecords retained', async () => {
     const firstAndActiveIP = '10.5.0.21' // firstIP set as active on startup, so it is already active
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== firstAndActiveIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const laterHealthyFailoverIP = remainingIPs[0]!
@@ -673,7 +673,7 @@ describe('Notification tests', () => {
   test('Dual Notification, first "failure" and then "success" at a later time. Service transition from "unhealthy" to "healthy". Detected unHealthy,active "ip" but failover available at a later point (after failover cooldown and "failed" notification)', async () => {
     //transition to unhealthy
     const firstAndActiveIP = '10.5.0.21' // firstIP set as active on startup, so it is already active
-    const webService = appState.webServices[serviceKey]!
+    const webService = appState.getWebService(serviceKey)!
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== firstAndActiveIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const laterHealthyFailoverIP = remainingIPs[0]!
@@ -753,5 +753,18 @@ describe('Leadership tests', () => {
       },
     })
     expect(appState.isLeader()).toBe(false)
+  })
+})
+
+describe('Notification tests', () => {
+  const serviceKey = 'crm.ops'
+
+  // common before each test initializer for all tests in this group
+  beforeEach(async () => {
+    jest.clearAllMocks()
+    await appTestUtil.beforeTestAppInitializer()
+  })
+
+  test('Success Notifications. Detected unHealthy,active "ip" and initiate failover with the available healthy "ip"', async () => {
   })
 })

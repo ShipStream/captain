@@ -1,0 +1,93 @@
+version: '1.0'
+services:
+  - name: forum-app
+    description: I am the forum app!
+    tags:
+      - support
+    zone_record: forum.ops
+    # public ips
+    addresses:
+      - 10.5.0.161
+    multi: false
+    check:
+      protocol: http
+      host: forum.ops
+      port: 80
+      path: /health
+    mate:
+      # private ips
+      addresses:
+        - 10.5.0.162
+        - 10.5.0.163
+        - 10.5.0.164
+        - 10.5.0.165
+        - 10.5.0.166
+        - 10.5.0.167
+        - 10.5.0.168
+        - 10.5.0.169
+      path: /ping
+    # check:
+    #   protocol: https
+    #   host: forum.ops
+    #   port: 443
+    #   path: /health
+    unhealthy_interval: 12
+    healthy_interval: 5
+    fall: 3
+    rise: 3
+    connect_timeout: 3
+    read_timeout: 3
+    cool_down: 60
+  - name: blog-app
+    description: blog app
+    tags:
+      - support
+    zone_record: blog.ops
+    addresses:
+      - 10.5.0.171
+    multi: true
+    check:
+      protocol: http
+      host: blog.ops
+      port: 80
+      path: /health
+    mate:
+      # private ips
+      addresses:
+        - 10.5.0.172
+        - 10.5.0.173
+        - 10.5.0.174
+        - 10.5.0.175
+        - 10.5.0.176
+        - 10.5.0.177
+        - 10.5.0.178
+        - 10.5.0.179
+      path: /ping
+    unhealthy_interval: 12
+    healthy_interval: 5
+    fall: 3
+    rise: 3
+    connect_timeout: 3
+    read_timeout: 3
+    cool_down: 60
+  # - name: ai-chat
+  #   description: I am the AI chat app!
+  #   tags:
+  #     - support
+  #   zone_record: aichat.ops
+  #   addresses:
+  #     - 10.5.0.71
+  #     - 10.5.0.72
+  #   multi: true
+  #   check:
+  #     protocol: http
+  #     host: aichat.ops
+  #     port: 80
+  #     path: /health
+  #   unhealthy_interval: 120
+  #   healthy_interval: 5
+  #   fall: 3
+  #   rise: 3
+  #   connect_timeout: 3
+  #   read_timeout: 3
+  #   cool_down: 60
