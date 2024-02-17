@@ -14,9 +14,11 @@ import webServiceHelper, {
 } from './webServiceHelper.js'
 import http from 'http'
 import https from 'https'
-import { nanoid } from 'nanoid'
 import {logger} from './../coreUtils.js'
 
+// Just an integeger to create unique instance id for WebServices in memory for debugging.
+// In case of SIGHUP, same service loaded again will have different instance ID
+let serviceIDCounter = 1
 /**
  * Maintains state and handles 'polling' for each service
  *
@@ -167,7 +169,7 @@ export class WebServiceManager {
   }
 
   private constructor(serviceConf: typeWebServiceConf, isRemote: boolean = false) {
-    this.uniqueID = `ID:${nanoid(12)}-${new Date().toISOString()}`
+    this.uniqueID = `ID#${++serviceIDCounter}#${new Date().toISOString()}`
     this.serviceConf = {...serviceConf, is_remote: isRemote}
     this.serviceState = {
       is_orphan: false,
@@ -822,20 +824,14 @@ export class WebServiceManager {
   public async getServiceDataForAPI() {
     const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)    
     const checks: any = {}
-    let allIps: string [] = []
-    //Go through all captains because, it is possible for checks to be missing for a particular ip in one or other captain if the service is just starting    
-    Object.values(this.serviceState.checks).forEach((eachCaptainData) => {
-      allIps.push(...Object.keys(eachCaptainData)) //ips are the keys
-    })
-    allIps = [...new Set([...allIps])] // remove duplicates
     //Construct combined checks data
-    for(const eachIP of allIps) {
+    for(const eachIP of this.serviceConf.addresses) {
       const ipData = {
         passing: 0,
         failing: 0,
       }
-      for(const eachRemoteCaptain of Object.keys(this.serviceState.checks)) {
-        const eachCaptainData = this.serviceState.checks[eachRemoteCaptain]
+      for(const eachCaptainUrl of Object.keys(this.serviceState.checks)) {
+        const eachCaptainData = this.serviceState.checks[eachCaptainUrl]
         if (eachCaptainData?.[eachIP]?.passing) {
           ipData.passing += 1
         } else if(eachCaptainData?.[eachIP]?.failing) {

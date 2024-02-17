@@ -72,120 +72,10 @@ services:
       captain-apps-install-packages:
         condition: service_completed_successfully
 
-  crm-app-1:
-    extends:
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      # link the relevant source as src/index.ts
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.21
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  crm-app-2:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.22
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  crm-app-3:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.23
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  ecommerce-app-1:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.31
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  ecommerce-app-2:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.32
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  ecommerce-app-3:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.33
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  ecommerce-app-4:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.34
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  helpdesk-app-1:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.41
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  helpdesk-app-2:
-    extends: 
-      file: docker-compose-base.yml
-      service: dummy-apps
-    volumes:
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    networks:
-      custom-network:
-        ipv4_address: 10.5.0.42
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-
   multi-ip-dummy-web-app:
     extends: 
       file: docker-compose-base.yml
-      service: dummy-apps-web
+      service: dummy-apps
     environment:
       # a). specify primary ip along with additional ips to be mapped to the same container instance,
       # to avoid performance issues of having one container per ip
@@ -212,6 +102,12 @@ services:
         10.5.0.168,10.5.0.169
         10.5.0.175,10.5.0.176,10.5.0.177
         10.5.0.178,10.5.0.179
+    volumes:
+      # link the relevant source as src/index.ts
+      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
+    depends_on:
+      dummy-apps-install-packages:
+        condition: service_completed_successfully
     networks:
       custom-network:
         ipv4_address: 10.5.0.122
@@ -262,9 +158,12 @@ services:
   dummy-consul-apps:
     extends:
       file: docker-compose-base.yml
-      service: dummy-apps-web
+      service: dummy-apps
     volumes:
       - ./__simulation__/dummy-apps/allSrc/dummy-consul-app.ts:/app/src/index.ts:ro
+    depends_on:
+      dummy-apps-install-packages:
+        condition: service_completed_successfully
     networks:
       custom-network:
         ipv4_address: 10.5.0.3
@@ -274,9 +173,12 @@ services:
   dummy-http-notification:
     extends:
       file: docker-compose-base.yml
-      service: dummy-apps-web
+      service: dummy-apps
     volumes:
       - ./__simulation__/dummy-apps/allSrc/dummy-http-notification-app.ts:/app/src/index.ts:ro
+    depends_on:
+      dummy-apps-install-packages:
+        condition: service_completed_successfully
     networks:
       custom-network:
         ipv4_address: 10.5.0.4

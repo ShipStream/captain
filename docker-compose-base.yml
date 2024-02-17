@@ -72,18 +72,7 @@ services:
     cap_add:
       - NET_ADMIN
     # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
-    command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
-
-  dummy-apps-web:
-    extends:
-      service: dummy-apps
-    volumes:
-      # link the relevant source as src/index.ts
-      - ./__simulation__/dummy-apps/allSrc/dummy-web-app.ts:/app/src/index.ts:ro
-    depends_on:
-      dummy-apps-install-packages:
-        condition: service_completed_successfully
-  
+    command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']  
 
   # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
   dns-server-template:

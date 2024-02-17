@@ -1,4 +1,6 @@
 import jwt from 'jsonwebtoken'
+import fs from 'fs/promises'
+import YAML from 'yaml'
 import {io as ioClient, type Socket as ClientSocket} from 'socket.io-client'
 import {
   MATE_EVENT_NAMES,
@@ -80,17 +82,34 @@ function receiveServiceStateChangeMessageFromGivenMates(mateList: string[], webS
         service: webServiceManager.serviceKey,
         upstreams,
         healthy
-      })  
+      })
     } else {
       throw new Error(`Given remote captain "${eachMateID}" is not known/configured/mocked`)
     }
   }
 }
 
-function receiveNewRemoteServicesFromGivenMates(mateList: string[]) {
+let messageIDCounter = 1
+async function receiveNewRemoteServicesFromGivenMates(mateList: string[]) {
   for (const eachMateID of mateList) {
     const mockSocketClientManager = mockClientSocketManagers[eachMateID]
     if (mockSocketClientManager) {
+      const servicesFile = await fs.readFile(appConfig.WEBSERVICE_YAML_LOCATION, 'utf8')
+      const loadedYaml = YAML.parse(servicesFile)
+      const servicesPayload = loadedYaml.map((serviceConf: any) => {
+        // Send everything except 'mate' property from yaml data
+        delete serviceConf.mate;
+        return serviceConf
+      })
+      console.log('receiveNewRemoteServicesFromGivenMates', { servicesPayload })
+      mockSocketClientManager.clientSocket.emit(MATE_EVENT_NAMES.NEW_REMOTE_SERVICES, {
+        message_id: `${appConfig.MATE_ID}-${messageIDCounter++}`,
+        mate_id: appConfig.MATE_ID,
+        services: servicesPayload
+      })  
+      // logger.info('processServiceFileYAML:2', {
+      //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
+      // });  
     } else {
       throw new Error(`Given remote captain "${eachMateID}" is not known/configured/mocked`)
     }
