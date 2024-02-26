@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import appConfig from './../appConfig.js'
-import {logger} from './../coreUtils.js'
+import {MAX_ALLOWED_RETRIES, isNetworkError, logger} from './../coreUtils.js'
 import appState from './../appState.js'
 import {DnsManager} from './dnsManager.js'
 import {CustomError} from './../CustomError.js'
@@ -19,48 +19,76 @@ export const CLOUDFLARE_ZONE_RECORDS_PER_PAGE = 10
 /**
  * Wrapper over node 'fetch' customized for typical response from cloudflare
  */
-async function customFetch(url: string, fetchParams?: RequestInit) {
-  const CLOUDFLARE_BASE_ZONE_URL = `${CLOUDFLARE_BASE_URL}/${appConfig.CLOUDFLARE_ZONE_ID}`
-  const token = appConfig.CLOUDFLARE_TOKEN
-  const response = await fetch(`${CLOUDFLARE_BASE_ZONE_URL}${url}`, {
-    ...fetchParams,
-    headers: {
-      ...fetchParams?.headers,
-      Authorization: `Bearer ${token}`,
-    },
+async function customFetch(
+  url: string,
+  fetchParams?: RequestInit,
+  retryOptions: {currentRetryAttempt: number; maxAllowedRetries: number} = {} as any
+) {
+  const CLOUDFLARE_BASE_ZONE_URL = `${CLOUDFLARE_BASE_URL}/${appConfig.CLOUDFLARE_ZONE_ID}`  
+  const fullUrl = `${CLOUDFLARE_BASE_ZONE_URL}${url}`
+  const logID = `cloudflareDnsManager:customFetch: ${fullUrl}`
+  retryOptions = Object.assign(retryOptions || {}, {
+    currentRetryAttempt: retryOptions?.currentRetryAttempt ?? 0,
+    maxAllowedRetries: retryOptions?.maxAllowedRetries ?? MAX_ALLOWED_RETRIES,
   })
-  logger.info('cloudflareDnsManager:customFetch', await response.clone().text())
-  if (response.ok) {
-    const jsonResponse: any = await response.json()
-    if (jsonResponse.success === true) {
-      return jsonResponse
+  try {
+    const token = appConfig.CLOUDFLARE_TOKEN
+    const response = await fetch(fullUrl, {
+      ...fetchParams,
+      headers: {
+        ...fetchParams?.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    logger.debug(logID, await response.clone().text())
+    if (response.ok) {
+      const jsonResponse: any = await response.json()
+      if (jsonResponse.success === true) {
+        return jsonResponse
+      } else {
+        const errorMessages = jsonResponse.errors?.map((eachError: any) => eachError.message)
+        throw new CustomError(`Error with dns server: ${errorMessages}`, {
+          url: `${url}`,
+          fetchParams,
+          response: jsonResponse,
+          errors: errorMessages,
+        })
+      }
     } else {
-      const errorMessages = jsonResponse.errors?.map((eachError: any) => eachError.message)
+      const responseText = await response.text()
+      let errorMessages
+      if (isJson(responseText)) {
+        const jsonResponse = JSON.parse(responseText)
+        errorMessages = jsonResponse?.error || jsonResponse?.errors?.map((eachError: any) => eachError.message)
+      } else {
+        errorMessages = [responseText]
+      }
+      if (!errorMessages) {
+        errorMessages = responseText || response.statusText || 'Unknown Error'
+      }
       throw new CustomError(`Error with dns server: ${errorMessages}`, {
         url: `${url}`,
         fetchParams,
-        response: jsonResponse,
+        response: responseText,
         errors: errorMessages,
       })
     }
-  } else {
-    const responseText = await response.text()
-    let errorMessages
-    if (isJson(responseText)) {
-      const jsonResponse = JSON.parse(responseText)
-      errorMessages = jsonResponse?.error || jsonResponse?.errors?.map((eachError: any) => eachError.message)
-    } else {
-      errorMessages = [responseText]
+  } catch (e: any) {
+    if (isNetworkError(e)) {
+      // wait and retry network errors
+      if (retryOptions.currentRetryAttempt < MAX_ALLOWED_RETRIES) {
+        retryOptions.currentRetryAttempt += 1
+        const waitTime = 5000 + 1500 * retryOptions.currentRetryAttempt
+        logger.warn(`${logID}: currentRetryAttempt`, {
+          attempt: retryOptions.currentRetryAttempt,
+          reason: e?.cause?.code,
+          waitTime,
+        })
+        await new Promise((resolve) => setTimeout(resolve, waitTime))
+        return customFetch(url, fetchParams, retryOptions)
+      }
     }
-    if (!errorMessages) {
-      errorMessages = responseText || response.statusText || 'Unknown Error'
-    }
-    throw new CustomError(`Error with dns server: ${errorMessages}`, {
-      url: `${url}`,
-      fetchParams,
-      response: responseText,
-      errors: errorMessages,
-    })
+    throw e
   }
 }
 
@@ -95,7 +123,7 @@ async function resolvedAddresses(zoneRecord: string): Promise<string[]> {
     name: zoneRecord,
     type: 'A',
   })
-  logger.info('resolvedAddresses:2', {resolvedAddressesResponse})
+  logger.debug('resolvedAddresses:2', {resolvedAddressesResponse})
   const result = resolvedAddressesResponse
     ?.map((eachRecord: any) => {
       return eachRecord.content
@@ -141,7 +169,7 @@ async function addZoneRecord(zoneRecordName: string, ipAddress: string) {
       `'zone_record' of service needs to fully qualified and shouldn't be a prefix: ${zoneRecordName} !== ${createdZoneRecordName}`
     )
   }
-  logger.info('addZoneRecord:addZoneRecordResponse', addZoneRecordResponse)
+  logger.debug('addZoneRecord:addZoneRecordResponse', addZoneRecordResponse)
 }
 
 /**
@@ -173,10 +201,10 @@ async function removeZoneRecord(zoneRecord: string, ipAddress: string) {
     return !!eachRecord.content
   })
   const existingRecord = result?.[0]
-  logger.info('removeZoneRecord:existingRecord', existingRecord)
+  logger.debug('removeZoneRecord:existingRecord', existingRecord)
   if (existingRecord) {
     const removeZoneRecordResponse = await customFetch(`/dns_records/${existingRecord.id}`, {method: 'delete'})
-    logger.info('removeZoneRecord:removeZoneRecordResponse', {
+    logger.debug('removeZoneRecord:removeZoneRecordResponse', {
       removeZoneRecordResponse,
     })
   }
@@ -223,7 +251,7 @@ async function validateDnsConf() {
   resetCache()
   // fetch zone details to test connection and auth
   const latestZoneData = await getZoneDetails()
-  logger.info('validateDnsConf', {zoneData: latestZoneData?.result})
+  logger.debug('validateDnsConf', {zoneData: latestZoneData?.result})
 }
 
 const cloudflareDnsManager: DnsManager = {

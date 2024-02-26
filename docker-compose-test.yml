@@ -30,7 +30,7 @@ services:
       - dns-server
     # dns:
     #   - 10.6.0.2
-    #   - 8.8.4.4      
+    #   - 8.8.4.4
     command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm run jest-exec']
     # command: ['ls -l && pnpm i --config.confirmModulesPurge=false && sleep infinity']
     # command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm exec -- jest --forceExit --detectOpenHandles --coverage']

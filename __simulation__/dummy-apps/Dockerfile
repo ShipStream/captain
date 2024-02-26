@@ -3,8 +3,8 @@
 # RUN apt-get update && apt install -y iproute2 iputils-ping procps dnsutils curl
 
 FROM node:20-alpine
-# network and process debugging tools
-RUN apk update && apk add iproute2 iputils-ping procps bind-tools curl
+# network tools, process debugging tools, text utilities
+RUN apk update && apk add iproute2 iputils-ping procps bind-tools curl perl
 
 WORKDIR /app
 

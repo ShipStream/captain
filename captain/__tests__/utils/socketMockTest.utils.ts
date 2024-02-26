@@ -25,7 +25,9 @@ export class MockSocketClientManager {
   changePollingFrequency() {}
   healthCheckUpdate() {}
   bulkHealthCheckUpdate() {}
-
+  newRemoteServices() {}
+  mateDisconnected() {}
+  
   constructor(targetServerUrl: string, clientCaptainUrl: string) {
     this.clientSocket = ioClient(targetServerUrl, {query: {token: getToken(), clientOrigin: clientCaptainUrl}})
     jest.spyOn(this.clientSocket, 'on')
@@ -39,6 +41,8 @@ export class MockSocketClientManager {
     this.clientSocket.on(EVENT_NAMES.REQUEST_CHANGE_POLLING_FREQ, this.changePollingFrequency)
     this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_UPDATE, this.healthCheckUpdate)
     this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, this.bulkHealthCheckUpdate)
+    this.clientSocket.on(EVENT_NAMES.NEW_REMOTE_SERVICES, this.newRemoteServices)
+    this.clientSocket.on(EVENT_NAMES.MATE_DISCONNECTED, this.mateDisconnected)
   }
 
   public static async createMockSocketClient(mainCaptainUnderTest: string, eachCaptainUrl: string) {
@@ -64,6 +68,8 @@ jest.spyOn(MockSocketClientManager.prototype, 'healthCheckRequest')
 jest.spyOn(MockSocketClientManager.prototype, 'changePollingFrequency')
 jest.spyOn(MockSocketClientManager.prototype, 'healthCheckUpdate')
 jest.spyOn(MockSocketClientManager.prototype, 'bulkHealthCheckUpdate')
+jest.spyOn(MockSocketClientManager.prototype, 'newRemoteServices')
+jest.spyOn(MockSocketClientManager.prototype, 'mateDisconnected')
 
 async function mockRemoteCaptains(otherCaptainUrls: string[]) {
   for (const eachCaptainUrl of otherCaptainUrls) {
@@ -119,8 +125,7 @@ function receiveHealthCheckUpdateBroadcastFromPeer(
     if (socketIOServer) {
       socketIOServer.emit(EVENT_NAMES.HEALTH_CHECK_UPDATE, {
         member: eachCaptainMemberUrl,
-        serviceKey: webService.serviceKey,
-        service: webService.serviceConf.name,
+        service: webService.serviceKey,
         address: ipAddress,
         failing: failing,
         passing: passing,

@@ -1,11 +1,60 @@
 import {ERROR_DNS_ZONE_NOT_INITIALIZED_PREFIX} from './../../src/dns/technitiumDnsManager.js'
 import appConfig from '../../src/appConfig.js'
+import appState from '../../src/appState.js'
 import {dnsManager} from '../../src/dns/dnsManager.js'
 import {WebServiceManager} from '../../src/web-service/webServiceManager.js'
 import * as WebServiceHelper from '../../src/web-service/webServiceHelper.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
 import webAppTest from './appTest.utils.js'
 import {MockSocketClientManager} from './socketMockTest.utils.js'
+
+
+/**
+ * Wait for given count of polls for the given ip
+ * Wait time calculated using the services's polling interval and timeouts
+ * @param {WebServiceManager} webService
+ * @param {string} targetIP
+ * @param {number} pollingCount
+ */
+async function waitForPollCount(
+  webService: WebServiceManager,
+  targetIP: string,
+  pollingCount: number,
+  verifyState: boolean = true
+) {
+  // calculate required timeout based pollingInterval, readTimeout, connectTimeout and 'pollingCount'
+  const timeOutInMs =
+    (webAppTest.getPollingInterval(webService) * pollingCount +
+      (webService.readTimeout + webService.connectTimeout) +
+      5) *
+    1000
+  await expect(
+    commonTest.waitUntilCalled(webService, 'pollEachAddress', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
+  ).resolves.not.toThrow()
+}
+
+/**
+ * Verify that the given count of polls for the given ip didn't happen
+ * Wait time calculated using the services's polling interval and timeouts
+ * @param {WebServiceManager} webService
+ * @param {string} targetIP
+ * @param {number} pollingCount
+ */
+async function FAIL_waitForPollCount(
+  webService: WebServiceManager,
+  targetIP: string,
+  pollingCount: number,
+) {
+  // calculate required timeout based pollingInterval, readTimeout, connectTimeout and 'pollingCount'
+  const timeOutInMs =
+    (webAppTest.getPollingInterval(webService) * pollingCount +
+      (webService.readTimeout + webService.connectTimeout) +
+      5) *
+    1000
+  await expect(
+    commonTest.waitUntilCalled(webService, 'pollSuccess', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
+  ).rejects.toThrow()
+}
 
 /**
  * Wait for given count of poll success for the given ip
@@ -39,6 +88,29 @@ async function waitForPollSuccessCount(
 }
 
 /**
+ * Verify that the given count of poll success for the given ip didn't happen
+ * Wait time calculated using the services's polling interval and timeouts
+ * @param {WebServiceManager} webService
+ * @param {string} targetIP
+ * @param {number} pollingCount
+ */
+async function FAIL_waitForPollSuccessCount(
+  webService: WebServiceManager,
+  targetIP: string,
+  pollingCount: number,
+) {
+  // calculate required timeout based pollingInterval, readTimeout, connectTimeout and 'pollingCount'
+  const timeOutInMs =
+    (webAppTest.getPollingInterval(webService) * pollingCount +
+      (webService.readTimeout + webService.connectTimeout) +
+      5) *
+    1000
+  await expect(
+    commonTest.waitUntilCalled(webService, 'pollSuccess', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
+  ).rejects.toThrow()
+}
+
+/**
  * Wait for given count of poll failure for the given ip
  * Wait time calculated using the services's polling interval and timeouts
  * @param {WebServiceManager} webService
@@ -66,6 +138,29 @@ async function waitForPollFailureCount(
     // expect(checksStateOfTargetIP?.failing).toBeGreaterThanOrEqual(count)
     expect(checksStateOfTargetIP?.failing).toBe(pollingCount)
   }
+}
+
+/**
+ * Verify that the given count of poll failure for the given ip didn't happen
+ * Wait time calculated using the services's polling interval and timeouts
+ * @param {WebServiceManager} webService
+ * @param {string} targetIP
+ * @param {number} pollingCount
+ */
+async function FAIL_waitForPollFailureCount(
+  webService: WebServiceManager,
+  targetIP: string,
+  pollingCount: number,
+) {
+  // calculate required timeout based pollingInterval, readTimeout, connectTimeout and 'pollingCount'
+  const timeOutInMs =
+    (webAppTest.getPollingInterval(webService) * pollingCount +
+      (webService.readTimeout + webService.connectTimeout) +
+      5) *
+    1000
+  await expect(
+    commonTest.waitUntilCalled(webService, 'pollFailed', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
+  ).rejects.toThrow()
 }
 
 /**
@@ -399,6 +494,53 @@ async function verifyRemoteCaptainReceivedBulkHealthCheckUpdate(mockClientSocket
 }
 
 /**
+ * Verify that the given captain didn't received the 'NEW_REMOTE_SERVICES' notification in the given time
+ */
+async function FAIL_verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager: MockSocketClientManager, times: number = 1) {
+  await expect(
+    commonTest.waitUntilCalled(
+      mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
+      mockClientSocketManager.newRemoteServices,
+      [MATCH_ANY_VALUE],
+      times,
+      1
+    )
+  ).rejects.toThrow()
+}
+
+
+/**
+ * Verify that the given captain received the 'NEW_REMOTE_SERVICES' notification
+ */
+async function verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager: MockSocketClientManager, times: number = 1) {
+  await expect(
+    commonTest.waitUntilCalled(
+      mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
+      mockClientSocketManager.newRemoteServices,
+      [MATCH_ANY_VALUE],
+      times,
+      1
+    )
+  ).resolves.not.toThrow()
+}
+
+/**
+ * Verify that the given captain received the 'MATE_DISCONNECTED' notification
+ */
+async function verifyRemoteCaptainReceivedMateDisconnected(mockClientSocketManager: MockSocketClientManager) {
+  await expect(
+    commonTest.waitUntilCalled(
+      mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
+      mockClientSocketManager.mateDisconnected,
+      [MATCH_ANY_VALUE],
+      1,
+      1
+    )
+  ).resolves.not.toThrow()
+}
+
+
+/**
  * Ensure that the give set of unhealthy ips were removed one by one,
  * and when all the 'ips' become unhealthy, initiate 'failover' process
  *
@@ -453,9 +595,57 @@ async function FAIL_waitForFailOverInit(webService: WebServiceManager, targetIP:
   await expect(commonTest.waitUntilCalled(webService, 'beginFailOverProcess', [targetIP], 1, 5000)).rejects.toThrow()
 }
 
+/**
+ * Make sure, service with the given params is not registered
+ *
+ */
+async function FAIL_waitUntilServiceRegistered(serviceKey: string, addresses: string[] = [], timeOutInMs: number = 10000) {
+  await expect(
+    commonTest.waitUntilPredicateSucceeds(() => {
+      const webService = appState.getWebService(serviceKey)
+      if (webService !== undefined) {
+        if (addresses) {
+          for(const eachAddress of addresses) {
+            if (!webService.serviceConf.addresses.includes(eachAddress)) {
+              return false
+            }
+          }
+        }
+        return true
+      }
+      return false
+    }, timeOutInMs)
+  ).rejects.toThrow()
+}
+
+/**
+ * Wait until the given service is registered into the captain
+ *
+ */
+async function waitUntilServiceRegistered(serviceKey: string, addresses: string[] = [], timeOutInMs: number = 10000) {
+  await expect(
+    commonTest.waitUntilPredicateSucceeds(() => {
+      const webService = appState.getWebService(serviceKey)
+      if (webService !== undefined) {
+        if (addresses) {
+          for(const eachAddress of addresses) {
+            if (!webService.serviceConf.addresses.includes(eachAddress)) {
+              return false
+            }
+          }
+        }
+        return true
+      }
+      return false
+    }, timeOutInMs)
+  ).resolves.not.toThrow()
+}
+
 const higherOrderTest = {
   waitForPollSuccessCount,
+  FAIL_waitForPollSuccessCount,
   waitForPollFailureCount,
+  FAIL_waitForPollFailureCount,
   waitForPollToRise,
   waitForPollToFall,
   waitForAddressChangeInit,
@@ -475,6 +665,13 @@ const higherOrderTest = {
   verifyRemoteCaptainReceivedBulkHealthCheckUpdate,
   waitForFailOverInit,
   FAIL_waitForFailOverInit,
+  verifyRemoteCaptainReceivedNewRemoteServices,
+  FAIL_verifyRemoteCaptainReceivedNewRemoteServices,  
+  verifyRemoteCaptainReceivedMateDisconnected,
+  FAIL_waitUntilServiceRegistered,
+  waitUntilServiceRegistered,
+  FAIL_waitForPollCount,
+  waitForPollCount,
 }
 
 export default higherOrderTest

@@ -36,7 +36,7 @@ process.on('uncaughtException', (error, origin) => {
 const app = express()
 const httpServer = createServer(app)
 httpServer.listen(80, async function () {
-  console.info(`App listening at: 35`, httpServer?.address?.())
+  console.info(`App listening at: 40`, httpServer?.address?.())
   // logger.info('appConfig', {
   //   appConfig,
   // })

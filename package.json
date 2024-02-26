@@ -5,11 +5,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "docker:dev": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans",
-    "docker:dev:attach": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev up --build --remove-orphans",
-    "docker:dev:stop": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev stop",
-    "docker:dev:kill": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev kill --remove-orphans",
-    "docker:dev:rm": "docker compose -f docker-compose-dev.yml -p dns-orchestrator-dev rm -f -s -v",
+    "docker:dev": "docker compose -f docker-compose.yml -p dns-orchestrator-dev up --build --remove-orphans",
+    "docker:dev:attach": "docker compose -f docker-compose.yml -p dns-orchestrator-dev up --build --remove-orphans",
+    "docker:dev:stop": "docker compose -f docker-compose.yml -p dns-orchestrator-dev stop",
+    "docker:dev:kill": "docker compose -f docker-compose.yml -p dns-orchestrator-dev kill --remove-orphans",
+    "docker:dev:rm": "docker compose -f docker-compose.yml -p dns-orchestrator-dev rm -f -s -v",
     "docker:test": "docker compose -f docker-compose-test.yml -p dns-orchestrator-test up --build --remove-orphans --abort-on-container-exit --exit-code-from captain-test-main"
   },
   "engines": {

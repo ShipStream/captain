@@ -119,6 +119,10 @@ function setupMswReqMocks() {
         '10.5.0.34',
         '10.5.0.41',
         '10.5.0.42',
+        '10.5.0.121',
+        '10.5.0.161',
+        '10.5.0.131',
+        '10.5.0.171',
       ],
       1000
     ),
@@ -133,6 +137,10 @@ function setupMswReqMocks() {
           return passthrough()
         })
     ),
+    // mate connections are listened on a different port on the captain
+    http.all(`${appConfig.SELF_URL.replace('ws://', 'http://').replace(appConfig.CAPTAIN_PORT, appConfig.MATE_PORT)}/socket.io/`, async ({request, params, cookies}) => {
+      return passthrough()
+    })    
   ]
 
   // slack service

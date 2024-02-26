@@ -62,7 +62,7 @@ export type typeWebServiceConf = {
 export type ipPassFailState = {
   failing: number
   passing: number
-  last_update: Date | null
+  last_update: Date
 }
 
 export type mateSpecificParamsType = {
@@ -100,17 +100,20 @@ export type typeWebServiceState = {
  *
  */
 async function processWebServiceFileYAML() {
-  logger.info('processServiceFileYAML')
+  logger.info('processServiceFileYAML', {
+    file: appConfig.WEBSERVICE_YAML_LOCATION
+  })
   if (existsSync(appConfig.WEBSERVICE_YAML_LOCATION)) {
     logger.info('processServiceFileYAML:1')
     const servicesFile = await fs.readFile(appConfig.WEBSERVICE_YAML_LOCATION, 'utf8')
+    logger.info('processServiceFileYAML:2')
     const loadedYaml = YAML.parse(servicesFile)
-    // logger.info('processServiceFileYAML:2', {
+    // logger.info('processServiceFileYAML:3', {
     //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
     // });
     await appState.registerLocalWebServices(loadedYaml?.services)
   } else {
-    logger.info('processServiceFileYAML:2')
+    logger.info('processServiceFileYAML:11')
     throw new Error(`WebService YAML file location invalid: ${appConfig.WEBSERVICE_YAML_LOCATION}`)
   }
 }
@@ -304,7 +307,7 @@ async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
           }
         }
       } else {
-        logger.info(logID, 'stage:7')
+        logger.info(logID, `Ignore. Not part of active addresses: ${activeAddresses}`)
       }
     }
   } catch (e: any) {

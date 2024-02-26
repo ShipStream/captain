@@ -79,12 +79,15 @@ services:
     environment:
       # a). specify primary ip along with additional ips to be mapped to the same container instance,
       # to avoid performance issues of having one container per ip
-      # b). comma, new-line and space can be used as separator
+      # b). comma, new-line, tab and space are all considered separators
       # Healthy ips
       IP_UP: >-
         10.5.0.21,10.5.0.22,10.5.0.23
         10.5.0.31,10.5.0.32,10.5.0.33,10.5.0.34
         10.5.0.41,10.5.0.42
+
+        10.5.0.121, 10.5.0.171
+
         10.5.0.122,10.5.0.123,10.5.0.124
         10.5.0.172,10.5.0.173,10.5.0.174
       # Time out ips
@@ -92,6 +95,8 @@ services:
 
       # UnHealthy/Error ips
       IP_DOWN: >-
+        10.5.0.131, 10.5.0.161
+
         10.5.0.125,10.5.0.126,10.5.0.127      
         10.5.0.128,10.5.0.129
         10.5.0.132,10.5.0.133,10.5.0.134,10.5.0.135
@@ -110,7 +115,7 @@ services:
         condition: service_completed_successfully
     networks:
       custom-network:
-        ipv4_address: 10.5.0.122
+        ipv4_address: 10.5.0.21
     command:  ['. ./scripts/assigned-ips.sh && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
 
   mate-1:
@@ -118,7 +123,7 @@ services:
       file: docker-compose-base.yml
       service: mate-template
     environment:
-      - CAPTAIN_URL=ws://10.5.0.11:7450,ws://10.5.0.12:7450,ws://10.5.0.13:7450
+      - CAPTAIN_URL=ws://10.5.0.13:7450,ws://10.5.0.11:7450,ws://10.5.0.12:7450
       - WEBSERVICE_YAML_LOCATION=/data/services-mate-1.yaml
       - MATE_ID=mate-1
     networks:
@@ -133,7 +138,7 @@ services:
       file: docker-compose-base.yml
       service: mate-template
     environment:
-      - CAPTAIN_URL=ws://10.5.0.12:7450,ws://10.5.0.12:7450,ws://10.5.0.13:7450
+      - CAPTAIN_URL=ws://10.5.0.12:7450,ws://10.5.0.13:7450,ws://10.5.0.11:7450
       - WEBSERVICE_YAML_LOCATION=/data/services-mate-2.yaml
       - MATE_ID=mate-2      
     networks:
@@ -143,14 +148,14 @@ services:
       mate-apps-install-packages:
         condition: service_completed_successfully
 
-  # # # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
-  # dns-server:
-  #   extends:
-  #     file: docker-compose-base.yml
-  #     service: dns-server-template
-  #   networks:
-  #     custom-network:
-  #       ipv4_address: 10.5.0.2
+  # # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
+  dns-server:
+    extends:
+      file: docker-compose-base.yml
+      service: dns-server-template
+    networks:
+      custom-network:
+        ipv4_address: 10.5.0.2
 
   # single app that simulate all the three consuls based on different url-prefix
   # ping dummy-consul-apps

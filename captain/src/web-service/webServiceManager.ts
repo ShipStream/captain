@@ -25,8 +25,8 @@ let serviceIDCounter = 1
  * @class WebServiceManager
  */
 export class WebServiceManager {
-  // Unique ID to help debugging purpose
-  uniqueID: string
+  // Debug ID to help debugging purpose
+  debugID: string
 
   /**
    * Holds web service configuration as read from /data/services.yaml for this specific web service
@@ -55,11 +55,12 @@ export class WebServiceManager {
   */
 
   /**
-   * Unique identifier for each web service
-   * Using 'zone_record' as serviceKey, maybe use 'name' ?
+   * Unique identifier for each web service,
+   * used to uniquely identify the service across the whole system ( captain peers, mates etc...)
+   * Using YAML 'name' key of the service as serviceKey
    */
   public get serviceKey() {
-    return this.serviceConf.zone_record
+    return this.serviceConf.name
   }
 
   public get serviceName() {
@@ -95,7 +96,7 @@ export class WebServiceManager {
   }
 
   get logID() {
-    return `SERVICE(${this.uniqueID}): ${this.serviceConf.name}(${this.serviceConf.zone_record}):`
+    return `SERVICE(${this.debugID}): ${this.serviceConf.name}(${this.serviceConf.zone_record}):`
   }
 
   get pollLogID() {
@@ -155,6 +156,7 @@ export class WebServiceManager {
   }
 
   constructInitialChecksData(ipAddresses: string[]): checksStateType {
+    logger.debug(this.logID, 'constructInitialChecksData', ipAddresses)
     const currentDateTime = new Date()
     return {
       [appConfig.SELF_URL]: ipAddresses.reduce((accumulator: any, eachAddress: string) => {
@@ -169,7 +171,7 @@ export class WebServiceManager {
   }
 
   private constructor(serviceConf: typeWebServiceConf, isRemote: boolean = false) {
-    this.uniqueID = `ID#${++serviceIDCounter}#${new Date().toISOString()}`
+    this.debugID = `ID#${++serviceIDCounter}#${new Date().toISOString()}`
     this.serviceConf = {...serviceConf, is_remote: isRemote}
     this.serviceState = {
       is_orphan: false,
@@ -208,7 +210,7 @@ export class WebServiceManager {
   public static async createRemoteWebService(mateID: string, serviceConf: typeWebServiceConf) {
     const webService = new WebServiceManager(serviceConf, true)
     webService.createMateParameters(mateID, {
-      addressses: serviceConf.addresses,
+      addressses: [...serviceConf.addresses],
       last_update: new Date(),
       is_orphan: false,
     })
@@ -246,7 +248,7 @@ export class WebServiceManager {
         this.resetHealthCheckByIP(ipAddress)
         appState
           .getSocketManager()
-          .broadcastRequestForHealthCheck(this, HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING, ipAddress)
+          .broadcastRequestForHealthCheck(this, ipAddress, HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING)
       } else if (stats.passing) {
         // no status change 'passing' before and 'passing' now
         if (stats.passing < this.rise) {
@@ -300,7 +302,7 @@ export class WebServiceManager {
         this.resetHealthCheckByIP(ipAddress)
         appState
           .getSocketManager()
-          .broadcastRequestForHealthCheck(this, HEALTH_CHECK_REQUEST_VERIFY_STATE.FAILING, ipAddress)
+          .broadcastRequestForHealthCheck(this, ipAddress, HEALTH_CHECK_REQUEST_VERIFY_STATE.FAILING)
       } else if (stats.failing) {
         // no status change 'failing' before and 'failing' now
         if (stats.failing < this.fall) {
@@ -461,6 +463,85 @@ export class WebServiceManager {
   }
 
   /**
+   * Self correcting mechanism to send health check request, when data is missing/stale for a remote captain.* 
+   * Mainly used to invalidate and reset polling for remote services as they are polled until rise/fall only,
+   * and there is a potential to miss polling data due to network errors or other conditions.
+   * Validation done only when local health-check/polling for an ip reached fall/rise for performance reasons.
+   * Determined ip wise instead of service wise for performance reasons.
+   *
+   * @memberof WebServiceManager
+   */
+  validateMissingStaleDataAndRequestHealthCheck() {
+    const activeRemoteServers = appState.getAllConnectedRemoteCaptainServers()
+    for (const eachIP of this.serviceConf.addresses) {
+      const localStats = this.serviceState.checks?.[appConfig.SELF_URL]?.[eachIP]
+      const localPollingHasReachedFallOrRise =
+        localStats && (localStats.passing >= this.rise || localStats.failing >= this.fall)
+      logger.info(this.logID, 'ipHasMissingOrStaleData:begin', {
+        eachIP,
+        localStats,
+        localPollingHasReachedFallOrRise,
+        data: this.serviceState.mates,
+      })
+      // Only resend 'health-check-request' for ips for whom local polling has reached fall/rise,
+      if (localPollingHasReachedFallOrRise) {
+        const ipHasMissingOrStaleData = activeRemoteServers.some((eachActiveRemoteServer) => {
+          const remoteStats = this.serviceState.checks?.[eachActiveRemoteServer]?.[eachIP]
+          const remotePollingHasReachedFallOrRise =
+            remoteStats && (remoteStats.passing >= this.rise || remoteStats.failing >= this.fall)
+          logger.info(this.logID, 'ipHasMissingOrStaleData:remoteStats', {
+            eachIP,
+            remoteStats,
+            remotePollingHasReachedFallOrRise,
+            checks: this.serviceState.checks,
+          })      
+          // remote polling has not reached fall/rise
+          if (!remotePollingHasReachedFallOrRise) {
+            if (remoteStats) {
+              const timePassedInSecs = (Date.now() - new Date(remoteStats.last_update).getTime()) / 1000
+              // case a). Stale data
+              // Time elapsed since last remote 'health-check-update' is greater than threshold,
+              // so possible stale data,
+              // requires 'health-check-request'
+              if (timePassedInSecs > 60) {
+                logger.warn('Stale data, requires "health-check-request"', {
+                  eachIP,
+                  eachActiveRemoteServer,
+                  timePassedInSecs
+                })
+                return true
+              }
+            } else {
+              // case b). Missing data
+              // No remote stats available for the ip,
+              // so possibly missed the 'health-check-update',
+              // so requires 'health-check-request'
+              logger.warn('Missing data, requires "health-check-request"', {
+                eachIP,
+                eachActiveRemoteServer,
+              })
+              return true
+            }
+          }
+          return false
+        })
+        // As long as a single remote peer has missing/stale data,
+        // 'health-check-request' is broadcast to all captain peers irrespective,
+        // so as to start over the polling again by all captain 'peers' for the 'ip' concerned
+        if (ipHasMissingOrStaleData) {
+          logger.info(this.logID, 'ipHasMissingOrStaleData', {
+            eachIP,
+            localStats,
+            checks: JSON.stringify(this.serviceState.checks, undefined, 2)
+          })
+          this.resetHealthCheckByIP(eachIP)
+          appState.getSocketManager().broadcastRequestForHealthCheck(this, eachIP)
+        }
+      }
+    }
+  }
+
+  /**
    * Initiate/re-initiate web service address polling.
    * Can be called again to use as 'ReInitiate' polling
    *
@@ -476,6 +557,9 @@ export class WebServiceManager {
     // initiate new polling
     this._pollLoopReference = setInterval(() => {
       logger.debug(this.pollLogID, 'POLLING:ALL')
+      if (this.serviceConf.is_remote) {
+        this.validateMissingStaleDataAndRequestHealthCheck()
+      }
       if (this.serviceConf.is_remote) {
         this.handlePollingForRemoteServices(this.pollLogID)
       } else {
@@ -616,6 +700,10 @@ export class WebServiceManager {
     const stats = this.getChecksDataByCurrentCaptainInstance()[ipAddress]!
     stats.failing = 0
     stats.passing = 0
+    // For remote services, polling/health-checks are paused on rise/fall, so needs to be restarted on health check reset.
+    if (this.serviceConf.is_remote) {
+      this.restartPolling()
+    }
   }
 
   /**
@@ -822,25 +910,35 @@ export class WebServiceManager {
   }
 
   public async getServiceDataForAPI() {
-    const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)    
+    const resolvedAddresses: string[] = await dnsManager.resolvedAddresses(this.serviceConf.zone_record)
     const checks: any = {}
     //Construct combined checks data
-    for(const eachIP of this.serviceConf.addresses) {
+    for (const eachIP of this.serviceConf.addresses) {
       const ipData = {
         passing: 0,
         failing: 0,
       }
-      for(const eachCaptainUrl of Object.keys(this.serviceState.checks)) {
+      for (const eachCaptainUrl of Object.keys(this.serviceState.checks)) {
         const eachCaptainData = this.serviceState.checks[eachCaptainUrl]
         if (eachCaptainData?.[eachIP]?.passing) {
           ipData.passing += 1
-        } else if(eachCaptainData?.[eachIP]?.failing) {
+        } else if (eachCaptainData?.[eachIP]?.failing) {
           ipData.failing += 1
         }
       }
       checks[eachIP] = ipData
     }
     return {
+      active_addresses: this.serviceState.active,      
+      ...(appConfig.NODE_ENV === 'development'
+        ? {
+            mateState: this.serviceState.mates,
+            addresses: this.serviceConf.addresses,
+            checksInternal: this.serviceState.checks,
+            serviceConf: this.serviceConf,
+            serviceState: this.serviceState,
+          }
+        : {}),
       name: this.serviceName,
       description: this.serviceConf.description,
       tags: this.serviceConf.tags,
@@ -848,7 +946,6 @@ export class WebServiceManager {
       check_protocol: this.serviceConf.check.protocol,
       check_hostname: this.serviceConf.check.host,
       resolved_addresses: resolvedAddresses,
-      active_addresses: this.serviceState.active,
       checks,
       status: this.serviceState.status,
     }
@@ -930,23 +1027,29 @@ export class WebServiceManager {
     // Is service mate managed and not orphan, then captain needs to do only checks until fall/rise
     // if (this.serviceConf.is_remote && !this.serviceState.is_orphan) {
     if (this.serviceConf.is_remote) {
-      const checks = this.getChecksDataByCurrentCaptainInstance()
-      const ipsWithNeitherFallNorRise = this.serviceConf.addresses.filter((eachIpAddress) => {
-        const checkDataForIp = checks[eachIpAddress]!
-        if (checkDataForIp && (checkDataForIp.failing >= this.fall || checkDataForIp.passing >= this.rise)) {
-          return false
+      // When failover is in progress keep running checks irrespective of rise/fall, to help find a failover target as early.
+      // ( may be not needed as mate could indicuate a state change but still, for extra resilience )
+      if (this.isFailOverInProgress()) {
+        return this.serviceConf.addresses
+      } else {
+        const checks = this.getChecksDataByCurrentCaptainInstance()
+        const ipsWithNeitherFallNorRise = this.serviceConf.addresses.filter((eachIpAddress) => {
+          const checkDataForIp = checks[eachIpAddress]!
+          if (checkDataForIp && (checkDataForIp.failing >= this.fall || checkDataForIp.passing >= this.rise)) {
+            return false
+          }
+          return true
+        })
+        const ipsOrphaned = []
+        for (const eachMateID of Object.keys(this.serviceState.mates || {})) {
+          const mateParams = this.serviceState.mates![eachMateID]!
+          if (mateParams.is_orphan) {
+            ipsOrphaned.push(...mateParams.addressses)
+          }
         }
-        return true
-      })
-      const ipsOrphaned = []
-      for (const eachMateID of Object.keys(this.serviceState.mates || {})) {
-        const mateParams = this.serviceState.mates![eachMateID]!
-        if (mateParams.is_orphan) {
-          ipsOrphaned.push(...mateParams.addressses)
-        }
+        // Remove duplicates using 'Set'
+        return [...new Set([...ipsWithNeitherFallNorRise, ...ipsOrphaned])]
       }
-      // Remove duplicates using 'Set'
-      return [...new Set([...ipsWithNeitherFallNorRise, ...ipsOrphaned])]
     }
     return undefined
   }
@@ -975,7 +1078,7 @@ export class WebServiceManager {
    * @param {typeWebServiceConf} newServiceConf
    * @memberof AppState
    */
-  mergeWebServiceConf(mateID: string, newServiceConf: typeWebServiceConf) {
+  async mergeWebServiceConf(mateID: string, newServiceConf: typeWebServiceConf) {
     if (this.serviceConf.is_remote) {
       // Merge public ips
       const addresses = this.serviceConf.addresses || []
@@ -990,15 +1093,15 @@ export class WebServiceManager {
         ...newServiceConf,
         addresses,
       }
-      logger.info(this.logID, 'mergeWebServiceConf:2', this.serviceState.checks)
+      logger.debug('mergeWebServiceConf', newServiceConf)
+      logger.info('mergeWebServiceConf:newServiceConf.addresses', newServiceConf.addresses)
       this.mergeChecksData(this.constructInitialChecksData(newServiceConf.addresses))
       this.createMateParameters(mateID, {
-        addressses: newServiceConf.addresses,
+        addressses: [...newServiceConf.addresses],
         last_update: new Date(),
         is_orphan: false,
       })
-      logger.info(this.logID, 'mergeWebServiceConf:3', this.serviceState.checks)
-      this.reInitiate()
+      await this.reInitiate()
       return this
     } else {
       throw new Error('Service configuration "merging" supported only for remote services')
@@ -1017,14 +1120,18 @@ export class WebServiceManager {
   }
 
   createMateParameters(mateID: string, mateParams: mateSpecificParamsType) {
+    logger.info('createMateParameters:preset', this.serviceState.mates)
     this.serviceState.mates = this.serviceState.mates || {} // initialize if needed
     this.serviceState.mates[mateID] = {...mateParams}
+    logger.info('createMateParameters:postset', this.serviceState.mates)
   }
 
   updateMateParameters(mateID: string, mateParams: Partial<mateSpecificParamsType>) {
+    logger.info('updateMateParameters:preset', this.serviceState.mates)
     if (this.serviceState.mates?.[mateID]) {
       this.serviceState.mates[mateID] = {...this.serviceState.mates[mateID], ...mateParams} as any
     }
+    logger.info('updateMateParameters:postset', this.serviceState.mates)
   }
 
   /* 

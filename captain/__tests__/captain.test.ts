@@ -13,6 +13,7 @@ import socketMockUtil from './utils/socketMockTest.utils.js'
 import higherOrderUtil from './utils/higherOrderTest.utils.js'
 import {NotificationService} from '../src/NotificationService.js'
 import { initializeDnsManager } from '../src/dns/dnsManager.js'
+import mateMockTest from './utils/mateMockTest.utils.js'
 
 const notificationCalls = {
   datadogSuccessCall: jest.fn(),
@@ -65,8 +66,8 @@ afterAll(async () => {
 jest.setTimeout(700000)
 
 describe('Tests. Primary/Common', () => {
-  const serviceKey = 'crm.ops'
-  // const serviceKey = 'ecommerce.ops'
+  const serviceKey = 'crm'
+  // const serviceKey = 'ecommerce'
   const targetIP = '10.5.0.21'
 
   // common before each test initializer for all tests in this group
@@ -201,16 +202,16 @@ describe('Tests. Primary/Common', () => {
 
 // Have custom beforeEach initializer for each test
 describe('Tests Custom. Primary/Common', () => {
-  const serviceKey = 'crm.ops'
-  // const serviceKey = 'ecommerce.ops'
+  const serviceKey = 'crm'
+  // const serviceKey = 'ecommerce'
   const targetIP = '10.5.0.21'
   test('Only leader can alter zone records or active addresses', async () => {
     await appTestUtil.beforeTestAppInitializer({
       patchedAppConfig: {
         //a). set consul http addr 'undefined' to enable non-HA
         CONSUL_HTTP_ADDR: undefined,
-        //b). Alter SELF_URL and CAPTAIN_PORT so as to run test as non-captain peer for this particular test
-        //Setting SELF_URL !== MEMBER_URLS[0] will make this non-captain as only first ip is captain
+        //b). Alter SELF_URL and CAPTAIN_PORT so as to run test as non-leader peer for this particular test
+        //Setting SELF_URL !== MEMBER_URLS[0] will make this non-leader as only first ip is captain
         SELF_URL: appConfig.MEMBER_URLS[1],
         CAPTAIN_PORT: '7402',
       },
@@ -241,7 +242,7 @@ describe('Tests Custom. Primary/Common', () => {
 })
 
 describe('Tests. With multi=false', () => {
-  const serviceKey = 'crm.ops'
+  const serviceKey = 'crm'
 
   // common before each test initializer for all tests in this group
   beforeEach(async () => {
@@ -377,7 +378,7 @@ describe('Tests. With multi=false', () => {
 
 // Have custom beforeEach initializer for each test
 describe('Tests Custom. With multi=false', () => {
-  const serviceKey = 'crm.ops'
+  const serviceKey = 'crm'
   const zoneRecord = 'crm.ops'
   test('Case: Existing-DnsEntry. Prefer existing dns-server entries. On bootstrap, existing dns record set as "active" address of webService', async () => {
     const targetIP = '10.5.0.22'
@@ -401,7 +402,7 @@ describe('Tests Custom. With multi=false', () => {
 })
 
 describe('Tests. With multi=true', () => {
-  const serviceKey = 'ecommerce.ops'
+  const serviceKey = 'ecommerce'
 
   // common before each test initializer for all tests in this group
   beforeEach(async () => {
@@ -570,7 +571,7 @@ describe('Tests. With multi=true', () => {
 
 // Have custom beforeEach initializer for each test
 describe('Tests Custom. With multi=true', () => {
-  const serviceKey = 'ecommerce.ops'
+  const serviceKey = 'ecommerce'
   const zoneRecord = 'ecommerce.ops'
   test('Case: Existing-Subset-Of-DnsEntries. On Bootstrap, all ips from services.yaml, set as activeAddresses and synced with dns-provider', async () => {
     const targetIP = '10.5.0.32'
@@ -608,7 +609,7 @@ describe('Tests Custom. With multi=true', () => {
 // HA and notification related tests
 
 describe('Notification tests', () => {
-  const serviceKey = 'crm.ops'
+  const serviceKey = 'crm'
 
   // common before each test initializer for all tests in this group
   beforeEach(async () => {
@@ -746,8 +747,8 @@ describe('Leadership tests', () => {
       patchedAppConfig: {
         //a). set consul http addr 'undefined' to enable non-HA
         CONSUL_HTTP_ADDR: undefined,
-        //b). Alter SELF_URL and CAPTAIN_PORT so as to run test as non-captain peer for this particular test
-        //Setting SELF_URL !== MEMBER_URLS[0] will make this non-captain as only first ip is captain
+        //b). Alter SELF_URL and CAPTAIN_PORT so as to run test as non-leader peer for this particular test
+        //Setting SELF_URL !== MEMBER_URLS[0] will make this non-leader as only first ip is captain
         SELF_URL: appConfig.MEMBER_URLS[1],
         CAPTAIN_PORT: '7402',
       },
@@ -756,15 +757,141 @@ describe('Leadership tests', () => {
   })
 })
 
-describe('Notification tests', () => {
-  const serviceKey = 'crm.ops'
+describe('Remote web service tests', () => {
+  const serviceKey = 'forum-app'
+  const targetIP = '10.5.0.121'
+  const targetMateID = mateMockTest.getMateIDs()[0]!
+  const secondMateID = mateMockTest.getMateIDs()[1]!
 
   // common before each test initializer for all tests in this group
   beforeEach(async () => {
     jest.clearAllMocks()
-    await appTestUtil.beforeTestAppInitializer()
   })
 
-  test('Success Notifications. Detected unHealthy,active "ip" and initiate failover with the available healthy "ip"', async () => {
+  test('Case: Leader. Receives remote services. Broadcast them to peers. Registers them for polling', async () => {
+    await appTestUtil.beforeTestAppInitializer()
+    // Remote service, so won't be available on boot
+    expect(appState.getWebService(serviceKey)).toBeUndefined()
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    // Service registered on message from mate
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey)
+    expect(appState.getWebService(serviceKey)).toBeDefined()
+    // All captain peers received the copy of the sevices ( broadcast )
+    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+      await higherOrderUtil.verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
+    }
   })
+
+  test('Case: Non-Leader. Receives remote services. Send it to the leader ( who will handle broadcasting ). Registers them for polling', async () => {
+    const leaderUrl = appConfig.MEMBER_URLS[0] // first is the leader in non-HA
+    const selfUrl = appConfig.MEMBER_URLS[1]
+    await appTestUtil.beforeTestAppInitializer({
+      patchedAppConfig: {
+        //a). set consul http addr 'undefined' to enable non-HA
+        CONSUL_HTTP_ADDR: undefined,
+        //b). Alter SELF_URL and CAPTAIN_PORT so as to run test as non-leader-captain peer for this particular test
+        //Setting SELF_URL !== MEMBER_URLS[0] will make this non-leader-captain as only first ip is captain
+        SELF_URL: selfUrl,
+        CAPTAIN_PORT: '7402',
+      },
+    })
+    appState.setLeaderUrl(leaderUrl)
+    // Remote service, so won't be available on boot
+    expect(appState.getWebService(serviceKey)).toBeUndefined()
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    // Service registered on message from mate
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey)
+    expect(appState.getWebService(serviceKey)).toBeDefined()
+    // Non-leader only sends it to the leader
+    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+      if (eachCaptain === leaderUrl) {
+        // Non-leader only sends it to the leader
+        await higherOrderUtil.verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
+      } else {
+        // Other captain peers won't receive it from this captain
+        await higherOrderUtil.FAIL_verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
+      }
+    }
+  })
+
+  test('Configuration for the same remote service from multiple/different "mates" are merged together', async () => {
+    await appTestUtil.beforeTestAppInitializer()
+    // Remote service, so won't be available on boot
+    expect(appState.getWebService(serviceKey)).toBeUndefined()
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    // Service registered on message from mate
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey, ['10.5.0.121'])
+    // Ensure, the ip from second mate is not available before the second mate sends message
+    await higherOrderUtil.FAIL_waitUntilServiceRegistered(serviceKey, ['10.5.0.121', '10.5.0.161'])
+    // Emit from second mate
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([secondMateID])
+    // Expect service to contain both ips
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey, ['10.5.0.121', '10.5.0.161'])
+  })
+
+  test('Remote services are polled until "rise"/"fall" only', async () => {
+    await appTestUtil.beforeTestAppInitializer()
+    // Remote service, so won't be available on boot
+    expect(appState.getWebService(serviceKey)).toBeUndefined()
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID!])
+    // Service registered on message from mate
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey, [targetIP])
+    const webService = appState.getWebService(serviceKey)!
+    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      ipAddress: targetIP,
+      failing: 0,
+      passing: webService.rise,
+    })
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise)
+    // Poll count doesn't go beyond 'webService.rise'
+    await higherOrderUtil.FAIL_waitForPollCount(webService, targetIP, webService.rise * 2)
+  })
+
+  test('Restart paused polling on "service-state-change"', async () => {
+    await appTestUtil.beforeTestAppInitializer()
+    // Remote service, so won't be available on boot
+    expect(appState.getWebService(serviceKey)).toBeUndefined()
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    // Service registered on message from mate
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey, [targetIP])
+    const webService = appState.getWebService(serviceKey)!
+    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      ipAddress: targetIP,
+      failing: 0,
+      passing: webService.rise,
+    })
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise)
+    // Poll count doesn't go beyond 'webService.rise'
+    await higherOrderUtil.FAIL_waitForPollCount(webService, targetIP, webService.rise * 2)
+    // Send "service-state-change" request
+    mateMockTest.emitServiceStateChangeMessageFromGivenMates([targetMateID], serviceKey, 2, 2)
+    // After "service-state-change" request, polling continuous again from start thereby, poll count will * 2
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise * 2)    
+  })
+
+  test('On "mate-disconnected", mark service "orphan" and do "local-service like" continuous polling ', async () => {
+    await appTestUtil.beforeTestAppInitializer()
+    // Remote service, so won't be available on boot
+    expect(appState.getWebService(serviceKey)).toBeUndefined()
+    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    // Service registered on message from mate
+    await higherOrderUtil.waitUntilServiceRegistered(serviceKey, [targetIP])
+    const webService = appState.getWebService(serviceKey)!
+    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      ipAddress: targetIP,
+      failing: 0,
+      passing: webService.rise,
+    })
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise)
+    // Poll count doesn't go beyond 'webService.rise'
+    await higherOrderUtil.FAIL_waitForPollCount(webService, targetIP, webService.rise * 2)
+    // Disconnect mate
+    await mateMockTest.disconnectClients([targetMateID])
+    jest.clearAllMocks()
+    // After mate disconnection, polling continuous like local services
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise * 2)
+  })
+
 })

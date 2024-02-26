@@ -153,14 +153,9 @@ export class MateSocketServerManager {
 
   receiveNewRemoteServices(logID: string, payLoad: any) {
     try {
-      logger.info(logID, 'receiveNewRemoteServices', payLoad.services)
-      appState.registerRemoteMateWebServices(payLoad.message_id, payLoad.mate_id, payLoad.services).catch((e) => {
-        logger.error(
-          new Error(`${logID}: receiveNewRemoteServices: registerGivenMateWebServices: Details: ${payLoad}`, {
-            cause: e,
-          })
-        )  
-      })
+      logger.info(logID, 'receiveNewRemoteServices')
+      logger.debug(logID, 'receiveNewRemoteServices: payLoad', payLoad.services)
+      // Step 1
       if (appState.isLeader() || !appState.getLeaderUrl()) { 
         // Case a). 'leader', re-broadcast to captain 'peers'
         // case b). 'no leader elected', re-broadcast to captain 'peers'
@@ -169,6 +164,15 @@ export class MateSocketServerManager {
         // Case 'non-leader', send it to captain 'leader'
         appState.getSocketManager().sendNewRemoteServices(appState.getLeaderUrl()!, payLoad)
       }
+      // Step2, because the service needs to be in other peers when this is leader and sends active addresses on registration.
+      // So, broadcast first and register later
+      appState.registerRemoteMateWebServices(payLoad.message_id, payLoad.mate_id, payLoad.services).catch((e) => {
+        logger.error(
+          new Error(`${logID}: receiveNewRemoteServices: registerGivenMateWebServices: Details: ${payLoad}`, {
+            cause: e,
+          })
+        )  
+      })
     } catch (e) {
       logger.error(
         new Error(`${logID}: receiveNewRemoteServices: Details: ${payLoad}`, {

@@ -38,7 +38,7 @@ const app = express()
 setupExpress(app)
 const httpServer = createServer(app)
 httpServer.listen(80, async function () {
-  console.info(`App listening at: 19`, httpServer?.address?.())
+  console.info(`App listening at: 46`, httpServer?.address?.())
   // logger.info('appConfig', {
   //   appConfig,
   // })

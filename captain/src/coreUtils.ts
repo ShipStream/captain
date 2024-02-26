@@ -134,16 +134,13 @@ export async function markGivenRemoteCaptainAsLeader(remoteLeaderURL: string) {
 }
 
 export async function initializeAppModules() {
-  await initializeDnsManager()  
+  await initializeDnsManager()
   await appState.registerRaceHandler()
   await appState.registerNotificationService()
   await appState.registerCaptainSocketServer(appConfig.CAPTAIN_PORT, {
     /* options */
   })
   await webServiceHelper.processWebServiceFileYAML()
-  await appState.connectWithOtherCaptains(
-    appConfig.MEMBER_URLS.filter((eachMember: string) => eachMember !== appConfig.SELF_URL)
-  )
   // if HA mode, then consul agent running along-side each captain will decide the leader.
   if (isHAMode()) {
     await appState.registerConsulService()
@@ -151,6 +148,9 @@ export async function initializeAppModules() {
     // alternate leader election ( first URL is the captain )
     await checkAndPromoteToLeader()
   }
+  await appState.connectWithOtherCaptains(
+    appConfig.MEMBER_URLS.filter((eachMember: string) => eachMember !== appConfig.SELF_URL)
+  )
   // Mate operations is dependent on leadership, so initialize after leader selection above.
   await appState.registerMateSocketServer(appConfig.MATE_PORT, {
     /* options */
@@ -274,7 +274,19 @@ export class CustomRaceConditionLock {
   }
 }
 
-const MAX_ALLOWED_RETRIES = 10
+export const MAX_ALLOWED_RETRIES = 10
+export function isNetworkError(e: any) {
+  if (
+    `${e?.cause?.code}` === 'ENOTFOUND' ||
+    `${e?.cause?.code}` === 'UND_ERR_CONNECT_TIMEOUT' ||
+    `${e?.cause?.code}` === 'UND_ERR_SOCKET' ||
+    `${e?.cause?.code}` === 'ECONNRESET'
+  ) {
+    return true
+  }
+  return false
+}
+
 /**
  * Wrapper over node 'fetch' with retry handler
  */
@@ -297,12 +309,18 @@ export async function customFetch(
     const responseText = await response.text()
     throw new Error(`${logID}: ${response.statusText}: ${responseText}`)
   } catch (e: any) {
-    if (`${e?.cause?.code}` === 'UND_ERR_SOCKET' || `${e?.cause?.code}` === 'ECONNRESET') {
+    if (isNetworkError(e)) {
       // wait and retry network errors
       if (retryOptions.currentRetryAttempt < MAX_ALLOWED_RETRIES) {
         retryOptions.currentRetryAttempt += 1
-        logger.warn(`${logID}: customFetch:currentRetryAttempt`, retryOptions.currentRetryAttempt)
-        await new Promise((resolve) => setTimeout(resolve, 5000))
+        const waitTime = 5000 + 1500 * retryOptions.currentRetryAttempt
+        logger.warn(`${logID}: currentRetryAttempt`, {
+          url,
+          attempt: retryOptions.currentRetryAttempt,
+          reason: e?.cause?.code,
+          waitTime,
+        })
+        await new Promise((resolve) => setTimeout(resolve, waitTime))
         return customFetch(logID, url, init, retryOptions)
       }
     }

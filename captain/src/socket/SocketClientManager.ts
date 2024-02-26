@@ -25,25 +25,53 @@ export class SocketClientManager {
   clientSocket: ClientSocket
   remoteCaptainUrl: string
 
-  private receiveNewLeader(payLoad: any) {
+  /**
+   * Process new leader message received from the 'captain' leader
+   *
+   * @private
+   * @memberof SocketClientManager
+   */
+  private receiveNewLeader(payLoad: any, ackCallback?: Function) {
     try {
       appState.setLeaderUrl(payLoad.new)
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveNewLeader',
+          status: 'ok',
+        })  
+      }
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: newLeader: Details: ${payLoad}`, {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveNewLeader',          
+          status: 'error',
+        })
+      }
     }
   }
 
-  private receiveActiveAddresses(payLoad: any) {
+  private async receiveActiveAddresses(payLoad: any, ackCallback?: Function) {
     try {
-      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
+      logger.info(`${this.logID}: receiveActiveAddresses: Details: ${payLoad}`)      
+      const webServiceManager = appState.getWebService(payLoad.service)!
       if (webServiceManager) {
-        webServiceManager.setActiveAddresses(payLoad.addresses)
+        await webServiceManager.setActiveAddresses(payLoad.addresses)
       } else {
-        logger.warn(`${this.logID}: activeAddresses: Unknown Service: %{payLoad.serviceKey}`)
+        logger.warn(`${this.logID}: activeAddresses: Unknown Service: ${payLoad.service}`)
+      }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveActiveAddresses',
+          status: 'ok',
+        })  
       }
     } catch (e) {
       logger.error(
@@ -51,14 +79,29 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveActiveAddresses',
+          status: 'error',
+        })
+      }
     }
   }
 
-  private receiveBulkActiveAddresses(payLoadArray: any) {
+  private async receiveBulkActiveAddresses(payLoadArray: any, ackCallback?: Function) {
     try {
+      logger.info(`${this.logID}: receiveBulkActiveAddresses: Details: ${payLoadArray}`)      
       // Array of active address payload
       for (const eachPayLoad of payLoadArray) {
-        this.receiveActiveAddresses(eachPayLoad)
+        await this.receiveActiveAddresses(eachPayLoad)
+      }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveBulkActiveAddresses',
+          status: 'ok',
+        })  
       }
     } catch (e) {
       logger.error(
@@ -66,13 +109,20 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveBulkActiveAddresses',
+          status: 'error',
+        })
+      }
     }
   }
 
-  private receiveHealthCheckRequest(payLoad: any) {
+  private receiveHealthCheckRequest(payLoad: any, ackCallback?: Function) {
     try {
       logger.info('healthCheckRequest', payLoad)
-      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
+      const webServiceManager = appState.getWebService(payLoad.service)!
       if (webServiceManager) {
         if (payLoad.verifyState === HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING) {
           webServiceManager.resetHealthCheckByIPToVerifyPassing(payLoad.address)
@@ -82,7 +132,14 @@ export class SocketClientManager {
           webServiceManager.resetHealthCheckByIP(payLoad.address)
         }
       } else {
-        logger.warn(`${this.logID}: healthCheckRequest: Unknown Service: %{payLoad.serviceKey}`)
+        logger.warn(`${this.logID}: healthCheckRequest: Unknown Service: ${payLoad.service}`)
+      }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveHealthCheckRequest',
+          status: 'ok',
+        })  
       }
     } catch (e) {
       logger.error(
@@ -90,13 +147,20 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveHealthCheckRequest',
+          status: 'error',
+        })
+      }
     }
   }
 
-  private receiveChangePollingFrequency(payLoad: any) {
+  private receiveChangePollingFrequency(payLoad: any, ackCallback?: Function) {
     try {
       logger.info('changePollingFrequency', payLoad)
-      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
+      const webServiceManager = appState.getWebService(payLoad.service)!
       if (webServiceManager) {
         if (payLoad.pollingType === CHANGE_POLLING_FREQ_POLLING_TYPE.HEALTHY) {
           webServiceManager.markHealthy(true)
@@ -106,7 +170,14 @@ export class SocketClientManager {
           logger.warn(`${this.logID}: changePollingFrequency: Unknown polling type`)
         }
       } else {
-        logger.warn(`${this.logID}: changePollingFrequency: Unknown Service: %{payLoad.serviceKey}`)
+        logger.warn(`${this.logID}: changePollingFrequency: Unknown Service: ${payLoad.service}`)
+      }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveChangePollingFrequency',
+          status: 'ok',
+        })
       }
     } catch (e) {
       logger.error(
@@ -114,13 +185,20 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveChangePollingFrequency',
+          status: 'error',
+        })
+      }
     }
   }
 
-  private receiveHealthCheckUpdate(payLoad: any) {
+  private async receiveHealthCheckUpdate(payLoad: any, ackCallback?: Function) {
     try {
       // logger.info(`${logID}: healthCheckUpdate`, payLoad)
-      const webServiceManager = appState.getWebService(payLoad.serviceKey)!
+      const webServiceManager = appState.getWebService(payLoad.service)!
       if (webServiceManager) {
         // Skip own data from 'other' memebers, usually in case of bulkHealthCheckUpdate
         if (payLoad.member !== appConfig.SELF_URL) {
@@ -148,11 +226,11 @@ export class SocketClientManager {
           // since we have received new 'checks' state data
           if (appState.isLeader()) {
             if (payLoad.passing === webServiceManager.rise) {
-              webServiceHelper.checkCombinedPeerStateAndInitiateAddActiveIP(webServiceManager, payLoad.address).catch((e) => {
+              await webServiceHelper.checkCombinedPeerStateAndInitiateAddActiveIP(webServiceManager, payLoad.address).catch((e) => {
                 logger.error(e)
               })
             } else if (payLoad.failing === webServiceManager.fall) {
-              webServiceHelper.checkCombinedPeerStateAndInitiateRemoveActiveIP(webServiceManager, payLoad.address).catch((e) => {
+              await webServiceHelper.checkCombinedPeerStateAndInitiateRemoveActiveIP(webServiceManager, payLoad.address).catch((e) => {
                 logger.error(e)
               })
             }
@@ -160,7 +238,14 @@ export class SocketClientManager {
           // logger.info(`${logID}: healthCheckUpdate:after`, checks);
         }
       } else {
-        logger.warn(`${this.logID}: healthCheckUpdate: Unknown Service: %{payLoad.serviceKey}`)
+        logger.warn(`${this.logID}: healthCheckUpdate: Unknown Service: ${payLoad.service}`)
+      }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveHealthCheckUpdate',
+          status: 'ok',
+        })
       }
     } catch (e) {
       logger.error(
@@ -168,13 +253,28 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveHealthCheckUpdate',
+          status: 'error',
+        })
+      }
     }
   }
 
-  private receiveBulkHealthCheckUpdate(payLoadArray: any) {
+  private async receiveBulkHealthCheckUpdate(payLoadArray: any, ackCallback?: Function) {
     try {
+      logger.info(`${this.logID}: bulkHealthCheckUpdate: Details: ${payLoadArray}`)
       for (const eachPayLoad of payLoadArray) {
-        this.receiveHealthCheckUpdate(eachPayLoad)
+        await this.receiveHealthCheckUpdate(eachPayLoad, undefined)
+      }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveBulkHealthCheckUpdate',
+          status: 'ok',
+        })
       }
     } catch (e) {
       logger.error(
@@ -182,6 +282,13 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveBulkHealthCheckUpdate',
+          status: 'error',
+        })
+      }
     }
   }
 
@@ -192,20 +299,32 @@ export class SocketClientManager {
    * @param {*} payLoad
    * @memberof SocketClientManager
    */
-  private receiveNewRemoteServices(payLoad: any) {
+  private async receiveNewRemoteServices(payLoad: any, ackCallback?: Function) {
     try {
       logger.info(this.logID, 'receiveNewRemoteServices')
-      appState.registerRemoteMateWebServices(payLoad.message_id, payLoad.mate_id, payLoad.services).catch((e) => {
+      logger.debug(this.logID, 'receiveNewRemoteServices: payLoad', payLoad)
+      // Step 1
+      if (appState.isLeader()) {
+        // Case 'leader', copy of mate payload received from a captain 'peer' directly to leader.
+        // The 'leader' needs to broadcast to all captain 'peers'
+        appState.getSocketManager().broadcastNewRemoteServices(payLoad)
+      }
+      // Step2, because the service needs to be in other peers when this is leader and sends active addresses on registration.
+      // So, broadcast first and register later
+      await appState.registerRemoteMateWebServices(payLoad.message_id, payLoad.mate_id, payLoad.services).catch((e) => {
         logger.error(
           new Error(`${this.logID}: receiveNewRemoteServices: registerGivenMateWebServices: Details: ${payLoad}`, {
             cause: e,
           })
         )  
       })
-      if (appState.isLeader()) {
-        // Case 'leader', copy of mate payload received from a captain 'peer' directly to leader.
-        // The 'leader' needs to broadcast to all captain 'peers'
-        appState.getSocketManager().broadcastNewRemoteServices(payLoad)
+
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveNewRemoteServices',
+          status: 'ok',
+        })
       }
     } catch (e) {
       logger.error(
@@ -213,6 +332,13 @@ export class SocketClientManager {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveNewRemoteServices',
+          status: 'error',
+        })
+      }
     }
   }
 
@@ -223,7 +349,7 @@ export class SocketClientManager {
    * @param {*} payLoad
    * @memberof SocketClientManager
    */
-  private async receiveMateDisconnected(payLoad: any) {
+  private async receiveMateDisconnected(payLoad: any, ackCallback?: Function) {
     try {
       const mateID = payLoad.mate_id
       logger.info(this.logID, mateID, 'receiveMateDisconnected')
@@ -235,32 +361,53 @@ export class SocketClientManager {
           mate_id: mateID
         })
       }
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveMateDisconnected',
+          status: 'ok'
+        })
+      }
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: receiveMateDisconnected: Details: ${payLoad}`, {
           cause: e,
         })
       )
+      // optional socket 'acknowledgement' handling
+      if (ackCallback) {
+        ackCallback({
+          acknowledgedBy: 'receiveMateDisconnected',
+          status: 'error',
+        })
+      }
     }
   }
 
   private async setupConnectionAndListeners() {
-    this.clientSocket.on(EVENT_NAMES.NEW_LEADER, (payLoad) => this.receiveNewLeader(payLoad))
-    this.clientSocket.on(EVENT_NAMES.ACTIVE_ADDRESSES, (payLoad) => this.receiveActiveAddresses(payLoad))
-    this.clientSocket.on(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, (payLoad) => this.receiveBulkActiveAddresses(payLoad))
-    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_REQUEST, (payLoad) => this.receiveHealthCheckRequest(payLoad))
-    this.clientSocket.on(EVENT_NAMES.REQUEST_CHANGE_POLLING_FREQ, (payLoad) => this.receiveChangePollingFrequency(payLoad))
-    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_UPDATE, (payLoad) => this.receiveHealthCheckUpdate(payLoad))
-    this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, (payLoad) => this.receiveBulkHealthCheckUpdate(payLoad))
-    this.clientSocket.on(EVENT_NAMES.NEW_REMOTE_SERVICES, (payLoad) => this.receiveNewRemoteServices(payLoad))
-    this.clientSocket.on(EVENT_NAMES.MATE_DISCONNECTED, (payLoad) => this.receiveMateDisconnected(payLoad))
+    this.clientSocket.on(EVENT_NAMES.NEW_LEADER, (payLoad, callback) => this.receiveNewLeader(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.ACTIVE_ADDRESSES, (payLoad, callback) => this.receiveActiveAddresses(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.BULK_ACTIVE_ADDRESSES, (payLoad, callback) => this.receiveBulkActiveAddresses(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_REQUEST, (payLoad, callback) => this.receiveHealthCheckRequest(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.REQUEST_CHANGE_POLLING_FREQ, (payLoad, callback) => this.receiveChangePollingFrequency(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.HEALTH_CHECK_UPDATE, (payLoad, callback) => this.receiveHealthCheckUpdate(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, (payLoad, callback) => this.receiveBulkHealthCheckUpdate(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.NEW_REMOTE_SERVICES, (payLoad, callback) => this.receiveNewRemoteServices(payLoad, callback))
+    this.clientSocket.on(EVENT_NAMES.MATE_DISCONNECTED, (payLoad, callback) => this.receiveMateDisconnected(payLoad, callback))
   }
 
   constructor(remoteCaptainUrl: string) {
     // const socket = io(captainUrl, {query: { SELF_URL: appConfig.SELF_URL }});
     this.remoteCaptainUrl = remoteCaptainUrl
-    this.clientSocket = io(this.remoteCaptainUrl, { query: { token: getToken(), clientOrigin: appConfig.SELF_URL } })
-    this.logID = `${SOCKET_CLIENT_LOG_ID}(To ${this.remoteCaptainUrl})`
+    this.clientSocket = io(this.remoteCaptainUrl, { 
+        query: { token: getToken(),
+        clientOrigin: appConfig.SELF_URL,
+        'reconnection': true,
+        'reconnectionDelay': 300,
+        'reconnectionDelayMax' : 500,
+        'randomizationFactor': 0,
+      } })
+    this.logID = `${SOCKET_CLIENT_LOG_ID}(From ${this.remoteCaptainUrl})`
   }
 
   cleanUpForDeletion() {

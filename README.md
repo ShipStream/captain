@@ -245,8 +245,11 @@ New services discovered by a connected Mate (just a copy of the payload received
 information immediately upon connection and these services must be communicated to the other Captains so each has the
 full data for all services.
 
+Multiple such messages are also sent when a new captain 'peer' joins the network so as to update the new captain about the state of existing remote web services. Messages derived from state rather than storing all previously received messages.
+
 ```json
 {
+  "message_id": "unique_id",
   "mate_id": "a1b2c3",
   "services": [ { "...":  "..." }]
 }
@@ -256,8 +259,11 @@ full data for all services.
 
 Similarly, a Mate disconnecting is reported to the other Captains as well. 
 
+Multiple such messages are also sent when a new captain 'peer' joins the network so as to update the new captain about all the previous disconnection messages of 'mates'. Message derived from state (is_orphan) rather than storing all previously received messages.
+
 ```json
 {
+  "message_id": "unique_id",
   "mate_id": "a1b2c3",
   "services": [ { "...":  "..." }]
 }
@@ -278,6 +284,8 @@ fall values. The members will then start emitting the health check update descri
 ```
 
 The "verifyState" can be either "passing" or "failing". It helps decide, whether to reset an ongoing health check ( that has not reached rise/fall yet ), if there is a change in the health of an "address" from "passing" to "failing" or "failing" to "passing".
+
+The "verifyState" is optional and in its absense, health check will be reset, irrespective of the current state ( 'passing' or 'failing')
 
 Additionally, a health check request for each service that is provided by a Mate is sent to the other members when
 the Mate disconnects from a Captain unexpectedly. This ensures that if the node the Mate is running on goes offline,

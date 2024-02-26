@@ -118,9 +118,14 @@ async function waitUntilPredicateSucceeds(closurePredicate: Function, timeOutInM
  * Wait until the given instance method is called given 'times' and with given 'arguments'
  * Compatible with both real and fake timers of jest
  *
+ * @template T
+ * @template M
  * @param {T} targetInstance // prototype of the Class
- * @param {M} targetMethodNameOrFunc // name of method as string
- * @param {number} timeOutInMs // timeout waiting for the given call with the specified criteria
+ * @param {(M | Function)} targetMethodNameOrFunc // name of method as string
+ * @param {(any[] | Function)} [requiredArgsOrPredicateFunc=[]]
+ * @param {number} [times=1]
+ * @param {number} [timeOutInMs=10000] // timeout waiting for the given call with the specified criteria
+ * @return {*}  {(Promise<any[] | undefined>)}
  */
 async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyNames<Required<T>>>(
   targetInstance: T,
@@ -176,7 +181,7 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
       console.log(`${logID}:waitUntilCalled`, {
         'instanceSpyData.calls?.length': instanceSpyData.calls?.length,
         matchingInvocationCount,
-        matchingCalls: matchingCalls
+        matchingCalls: JSON.stringify(matchingCalls)
       })
       return matchingCalls
     }

@@ -12,6 +12,7 @@ import technitiumDnsManager, {
 } from '../../src/dns/technitiumDnsManager.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
 import socketMockTest from './socketMockTest.utils.js'
+import mateMockTest from './mateMockTest.utils.js'
 import requestMockTest from './requestMockTest.utils.js'
 
 function getPollingInterval(webService: WebServiceManager) {
@@ -27,6 +28,7 @@ function getChecksDataByCaptainAndIP(webService: WebServiceManager, captainUrl: 
 jest.spyOn(WebServiceManager.prototype, 'handleActiveAddressChange')
 jest.spyOn(WebServiceManager.prototype, 'pollSuccess')
 jest.spyOn(WebServiceManager.prototype, 'pollFailed')
+jest.spyOn(WebServiceManager.prototype, 'pollEachAddress')
 jest.spyOn(WebServiceManager.prototype, 'beginFailOverProcess')
 jest.spyOn(WebServiceHelper.default, 'checkCombinedPeerStateAndInitiateAddActiveIP')
 jest.spyOn(WebServiceHelper.default, 'checkCombinedPeerStateAndInitiateRemoveActiveIP')
@@ -52,8 +54,10 @@ async function beforeTestAppInitializer({
   await commonTest.passTimeInMillis(2000)
   jest.useFakeTimers()
   await socketMockTest.mockRemoteCaptains(getRemoteCaptains())
+  await mateMockTest.mockMateClients(mateMockTest.getMateIDs())
   // initialize the modules during every test as it will be cleanedup/reset after each test
   await initializeAppModules()
+  await commonTest.advanceBothRealAndFakeTime(1000)
   // setup '200' response all ips of all the loaded webServices
   // webAppTest.getMswServer().use(...webAppTest.failByNetworkErrorResponses([targetIP]))
 }

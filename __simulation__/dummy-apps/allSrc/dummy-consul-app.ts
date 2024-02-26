@@ -85,8 +85,8 @@ function electRandomLeader() {
 }
 
 // Elect a random leader on boot
-electRandomLeader()
-// consulDummyResponses[2]!.Stats.consul.leader = 'true'
+// electRandomLeader()
+consulDummyResponses[2]!.Stats.consul.leader = 'true'
 
 app.post('/make-all-followers', (req, res) => {
   makeAllFollowers()

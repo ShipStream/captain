@@ -1,9 +1,10 @@
 #!/bin/bash
 echo 'Starting shell script to assign additional ip addresses for the same node'
 ASSIGNED_IPS="${IP_UP},${IP_DELAY},${IP_DOWN}"
+echo $ASSIGNED_IPS:$ASSIGNED_IPS
 echo "Both , and space are separators"
-SANITISED_ASSIGNED_IPS=${ASSIGNED_IPS// /,}
-echo $SANITISED_ASSIGNED_IPS
+SANITISED_ASSIGNED_IPS=$(exec echo "${IP_UP},${IP_DELAY},${IP_DOWN}" | perl -0777 -pe "s/\s/,/g")
+echo $SANITISED_ASSIGNED_IPS:$SANITISED_ASSIGNED_IPS
 IFS=","
 for eachIP in $SANITISED_ASSIGNED_IPS
 do

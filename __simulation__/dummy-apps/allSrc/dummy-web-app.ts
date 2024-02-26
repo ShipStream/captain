@@ -2,11 +2,11 @@ import express from 'express'
 import {createServer} from 'http'
 
 let ipsUP = process.env.IP_UP || []
-ipsUP =`${ipsUP}`.replaceAll(' ', ',').split(',').filter((eachValue) => !!eachValue) as any
+ipsUP =`${ipsUP}`.replaceAll(/\s+/g, ',').split(',').filter((eachValue) => !!eachValue) as any
 let ipsDELAYED = process.env.IP_DELAY || []
-ipsDELAYED =`${ipsDELAYED}`.replaceAll(' ', ',').split(',').filter((eachValue) => !!eachValue) as any
+ipsDELAYED =`${ipsDELAYED}`.replaceAll(/\s+/g, ',').split(',').filter((eachValue) => !!eachValue) as any
 let ipsDOWN = process.env.IP_DOWN || []
-ipsDOWN =`${ipsDOWN}`.replaceAll(' ', ',').split(',').filter((eachValue) => !!eachValue) as any
+ipsDOWN =`${ipsDOWN}`.replaceAll(/\s+/g, ',').split(',').filter((eachValue) => !!eachValue) as any
 console.log('assignedIps:3', {
   ipsUP,
   ipsDELAYED,

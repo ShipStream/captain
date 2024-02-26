@@ -1,18 +1,14 @@
 {
   "name": "captain-app",
   "version": "1.0.0",
-  "description": "This Node.js app ('Captain') acts as a public DNS failover orchestrator. It monitors health of services and updates DNS records according to the health of each upstream address. It can run stand-alone or be accompanied by any number of 'Mates' which are used to report remote services and perform remote health checks on those services.",
+  "description": "App skeleton for a number of fake/dummy apps needed for docker development setup",
   "main": "index.js",
   "private": true,
   "type": "module",
   "scripts": {
     "lint": "tsc",
     "dev": "nodemon",
-    "build": "tsc -p tsconfig.json",
-    "test": "jest --coverage",
-    "docker:dev": "docker-compose -f docker-compose-dev.yml -p captain-app-dev up --build",
-    "docker:prod": "docker-compose -f docker-compose-prod.yml -p captain-app-prod up --build",
-    "docker:test": "docker-compose -f docker-compose-test.yml -p captain-app-test up --build"
+    "build": "tsc -p tsconfig.json"
   },
   "engines": {
     "node": ">=20.0.0"

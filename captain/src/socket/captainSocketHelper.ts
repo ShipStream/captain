@@ -4,16 +4,16 @@ import type {Socket as ClientSocket} from 'socket.io-client'
 import appConfig from './../appConfig.js'
 import {logger} from './../coreUtils.js'
 
-export const EVENT_NAMES = {
-  NEW_LEADER: 'new-leader',
-  ACTIVE_ADDRESSES: 'active-addresses',
-  BULK_ACTIVE_ADDRESSES: 'complete-active-addresses', //  array of 'ACTIVE_ADDRESSES' as payLoad
-  HEALTH_CHECK_REQUEST: 'health-check-request',
-  REQUEST_CHANGE_POLLING_FREQ: 'request-change-polling-freq',
-  HEALTH_CHECK_UPDATE: 'health-check-update',
-  BULK_HEALTH_CHECK_UPDATE: 'complete-health-check-update', // array of 'HEALTH_CHECK_UPDATE' as payLoad
-  NEW_REMOTE_SERVICES: 'new-remote-services', // re-broadcast of mate message to captain 'peers' or 'leader'
-  MATE_DISCONNECTED: 'mate-disconnected', // re-broadcast of mate message to captain 'peers' or 'leader'
+export const enum EVENT_NAMES {
+  NEW_LEADER = 'new-leader',
+  ACTIVE_ADDRESSES = 'active-addresses',
+  BULK_ACTIVE_ADDRESSES = 'complete-active-addresses', //  array of 'ACTIVE_ADDRESSES' as payLoad
+  HEALTH_CHECK_REQUEST = 'health-check-request',
+  REQUEST_CHANGE_POLLING_FREQ = 'request-change-polling-freq',
+  HEALTH_CHECK_UPDATE = 'health-check-update',
+  BULK_HEALTH_CHECK_UPDATE = 'complete-health-check-update', // array of 'HEALTH_CHECK_UPDATE' as payLoad
+  NEW_REMOTE_SERVICES = 'new-remote-services', // re-broadcast of mate message to captain 'peers' or 'leader'
+  MATE_DISCONNECTED = 'mate-disconnected', // re-broadcast of mate disconnection information to captain 'peers' or 'leader'
 }
 
 export const MATE_EVENT_NAMES = {
@@ -78,9 +78,9 @@ export async function registerClientDebugListeners(clientSocket: ClientSocket, s
     // else the socket will automatically try to reconnect
   })
   clientSocket.onAnyOutgoing((event, args) => {
-    logger.info(`${logID}: outgoingMessage`, event, JSON.stringify(args))
+    logger.debug(`${logID}: outgoingMessage`, event, JSON.stringify(args))
   })
   clientSocket.onAny((event, args) => {
-    logger.info(`${logID}: incomingMessage`, event, JSON.stringify(args))
+    logger.debug(`${logID}: incomingMessage`, event, JSON.stringify(args))
   })
 }
