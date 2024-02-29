@@ -7,13 +7,13 @@ import appConfig from '../src/appConfig.js'
 import appState from '../src/appState.js'
 import * as WebServiceHelper from '../src/web-service/webServiceHelper.js'
 import appTestUtil from './utils/appTest.utils.js'
-import requestMockUtil from './utils/requestMockTest.utils.js'
+import requestMockUtil from './utils/requestMock.utils.js'
 import commonTestUtil from './utils/commonTest.utils.js'
-import socketMockUtil from './utils/socketMockTest.utils.js'
+import remoteCaptainMockUtil from './utils/remoteCaptainMock.utils.js'
+import remoteMateMockUtil from './utils/remoteMateMock.utils.js'
 import higherOrderUtil from './utils/higherOrderTest.utils.js'
 import {NotificationService} from '../src/NotificationService.js'
-import { initializeDnsManager } from '../src/dns/dnsManager.js'
-import mateMockTest from './utils/mateMockTest.utils.js'
+import {initializeDnsManager} from '../src/dns/dnsManager.js'
 
 const notificationCalls = {
   datadogSuccessCall: jest.fn(),
@@ -23,6 +23,7 @@ const notificationCalls = {
   genericSuccessCall: jest.fn(),
   genericFailureCall: jest.fn(),
 }
+
 beforeAll(async () => {
   requestMockUtil.setupMswReqMocks()
   requestMockUtil.getMswServer().listen({
@@ -52,7 +53,7 @@ beforeAll(async () => {
         notificationCalls.genericSuccessCall(requestId, url, payload)
       }
     }
-  })  
+  })
 })
 
 afterEach(async () => {
@@ -97,12 +98,12 @@ describe('Tests. Primary/Common', () => {
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
     })
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: remainingIPs[0]!,
       failing: 0,
       passing: 3,
@@ -117,7 +118,7 @@ describe('Tests. Primary/Common', () => {
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
@@ -140,8 +141,8 @@ describe('Tests. Primary/Common', () => {
   test('Leader information broadcast to all remote peers', async () => {
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     // Test all remote-peer clients for having received 'new-leader' notification
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       await higherOrderUtil.verifyRemoteCaptainReceivedNewLeader(mockClientSocketManager)
     }
   })
@@ -149,15 +150,15 @@ describe('Tests. Primary/Common', () => {
     const webService = appState.getWebService(serviceKey)!
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     // Test all remote-peer clients for not-having received 'healthCheckNotification' notification
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       await higherOrderUtil.FAIL_verifyRemoteCaptainReceivedHealthCheckUpdate(mockClientSocketManager)
     }
     await higherOrderUtil.waitForPollToRise(webService, targetIP)
     // Test all remote-peer clients for having received 'healthCheckNotification' notification,
     // with given ip and given 'passing' times value
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       await higherOrderUtil.verifyRemoteCaptainReceivedHealthCheckUpdate(mockClientSocketManager, {
         ipAddress: targetIP,
         passing: webService.rise,
@@ -183,8 +184,8 @@ describe('Tests. Primary/Common', () => {
     await higherOrderUtil.waitForHealthReset(webService, targetIP)
     // Test all remote-peer clients for having received 'healthCheckNotification' notification,
     // with given ip
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       await higherOrderUtil.verifyRemoteCaptainReceivedHealthCheckUpdate(mockClientSocketManager, {
         ipAddress: targetIP,
       })
@@ -193,8 +194,8 @@ describe('Tests. Primary/Common', () => {
   test('Newly connecting remote peer receives complete state data on successfull initial connection', async () => {
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     // Test all remote-peer to have received 'complete state data' on initial connect
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       await higherOrderUtil.verifyRemoteCaptainReceivedBulkHealthCheckUpdate(mockClientSocketManager)
     }
   })
@@ -223,12 +224,12 @@ describe('Tests Custom. Primary/Common', () => {
     const remainingIPs = webService.serviceConf?.addresses?.filter((eachIP) => eachIP !== targetIP)
     expect(remainingIPs?.length).toBeGreaterThan(0)
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
     })
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: remainingIPs[0]!,
       failing: 0,
       passing: 3,
@@ -263,12 +264,12 @@ describe('Tests. With multi=false', () => {
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const healthyFailoverIP = remainingIPs[0]!
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
     })
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: healthyFailoverIP,
       failing: 0,
       passing: 3,
@@ -289,7 +290,7 @@ describe('Tests. With multi=false', () => {
       .getMswServer()
       .use(...requestMockUtil.failByNetworkErrorResponses([targetIP, laterHealthyFailoverIP]))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
@@ -303,7 +304,7 @@ describe('Tests. With multi=false', () => {
     // wait for poll reset
     await higherOrderUtil.waitForHealthReset(webService, laterHealthyFailoverIP)
     jest.clearAllMocks()
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: laterHealthyFailoverIP,
       failing: 0,
       passing: 3,
@@ -323,7 +324,7 @@ describe('Tests. With multi=false', () => {
       .getMswServer()
       .use(...requestMockUtil.failByNetworkErrorResponses([targetIP, laterHealthyFailoverIP]))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
@@ -346,7 +347,7 @@ describe('Tests. With multi=false', () => {
       .getMswServer()
       .use(...requestMockUtil.failByNetworkErrorResponses([targetIP, laterHealthyFailoverIP]))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 3,
       passing: 0,
@@ -364,7 +365,7 @@ describe('Tests. With multi=false', () => {
     // wait for poll reset
     await higherOrderUtil.waitForHealthReset(webService, laterHealthyFailoverIP)
     await higherOrderUtil.waitForPollToRise(webService, laterHealthyFailoverIP)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: laterHealthyFailoverIP,
       failing: 0,
       passing: 3,
@@ -421,7 +422,7 @@ describe('Tests. With multi=true', () => {
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses([unHealthyIP]))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: unHealthyIP,
       failing: 3,
       passing: 0,
@@ -439,7 +440,7 @@ describe('Tests. With multi=true', () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses(unHealthyIPs))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     for (const unHealthyIP of unHealthyIPs) {
-      socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
         ipAddress: unHealthyIP,
         failing: 3,
         passing: 0,
@@ -468,7 +469,7 @@ describe('Tests. With multi=true', () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses(unHealthyIPs))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     for (const unHealthyIP of unHealthyIPs) {
-      socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
         ipAddress: unHealthyIP,
         failing: 3,
         passing: 0,
@@ -491,7 +492,7 @@ describe('Tests. With multi=true', () => {
     await higherOrderUtil.waitForHealthReset(webService, unHealthyIP2)
     jest.clearAllMocks()
     await higherOrderUtil.waitForPollToRise(webService, unHealthyIP2)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: unHealthyIP2,
       failing: 0,
       passing: 3,
@@ -510,7 +511,7 @@ describe('Tests. With multi=true', () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses(unHealthyIPs))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     for (const unHealthyIP of unHealthyIPs) {
-      socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
         ipAddress: unHealthyIP,
         failing: 3,
         passing: 0,
@@ -534,7 +535,7 @@ describe('Tests. With multi=true', () => {
     requestMockUtil.getMswServer().use(...requestMockUtil.failByNetworkErrorResponses(unHealthyIPs))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
     for (const unHealthyIP of unHealthyIPs) {
-      socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+      remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
         ipAddress: unHealthyIP,
         failing: 3,
         passing: 0,
@@ -558,7 +559,7 @@ describe('Tests. With multi=true', () => {
     // wait for poll reset
     await higherOrderUtil.waitForHealthReset(webService, laterHealthyFailoverIP)
     await higherOrderUtil.waitForPollToRise(webService, laterHealthyFailoverIP)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: laterHealthyFailoverIP,
       failing: 0,
       passing: 3,
@@ -607,7 +608,6 @@ describe('Tests Custom. With multi=true', () => {
 })
 
 // HA and notification related tests
-
 describe('Notification tests', () => {
   const serviceKey = 'crm'
 
@@ -625,12 +625,12 @@ describe('Notification tests', () => {
     expect(remainingIPs?.length).toBeGreaterThan(0)
     const healthyFailoverIP = remainingIPs[0]!
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: firstAndActiveIP,
       failing: 3,
       passing: 0,
     })
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: healthyFailoverIP,
       failing: 0,
       passing: 3,
@@ -655,7 +655,7 @@ describe('Notification tests', () => {
       .getMswServer()
       .use(...requestMockUtil.failByNetworkErrorResponses([firstAndActiveIP, laterHealthyFailoverIP]))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: firstAndActiveIP,
       failing: 3,
       passing: 0,
@@ -682,7 +682,7 @@ describe('Notification tests', () => {
       .getMswServer()
       .use(...requestMockUtil.failByNetworkErrorResponses([firstAndActiveIP, laterHealthyFailoverIP]))
     await commonTestUtil.advanceBothRealAndFakeTime(1000)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: firstAndActiveIP,
       failing: 3,
       passing: 0,
@@ -703,7 +703,7 @@ describe('Notification tests', () => {
     // wait for poll reset
     await higherOrderUtil.waitForHealthReset(webService, laterHealthyFailoverIP)
     await higherOrderUtil.waitForPollToRise(webService, laterHealthyFailoverIP)
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: laterHealthyFailoverIP,
       failing: 0,
       passing: 3,
@@ -760,8 +760,8 @@ describe('Leadership tests', () => {
 describe('Remote web service tests', () => {
   const serviceKey = 'forum-app'
   const targetIP = '10.5.0.121'
-  const targetMateID = mateMockTest.getMateIDs()[0]!
-  const secondMateID = mateMockTest.getMateIDs()[1]!
+  const targetMateID = remoteMateMockUtil.getMateIDs()[0]!
+  const secondMateID = remoteMateMockUtil.getMateIDs()[1]!
 
   // common before each test initializer for all tests in this group
   beforeEach(async () => {
@@ -772,13 +772,13 @@ describe('Remote web service tests', () => {
     await appTestUtil.beforeTestAppInitializer()
     // Remote service, so won't be available on boot
     expect(appState.getWebService(serviceKey)).toBeUndefined()
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([targetMateID])
     // Service registered on message from mate
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey)
     expect(appState.getWebService(serviceKey)).toBeDefined()
     // All captain peers received the copy of the sevices ( broadcast )
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       await higherOrderUtil.verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
     }
   })
@@ -799,13 +799,13 @@ describe('Remote web service tests', () => {
     appState.setLeaderUrl(leaderUrl)
     // Remote service, so won't be available on boot
     expect(appState.getWebService(serviceKey)).toBeUndefined()
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([targetMateID])
     // Service registered on message from mate
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey)
     expect(appState.getWebService(serviceKey)).toBeDefined()
     // Non-leader only sends it to the leader
-    for (const eachCaptain of Object.keys(socketMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = socketMockUtil.mockClientSocketManagers[eachCaptain]!
+    for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
+      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
       if (eachCaptain === leaderUrl) {
         // Non-leader only sends it to the leader
         await higherOrderUtil.verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
@@ -820,13 +820,13 @@ describe('Remote web service tests', () => {
     await appTestUtil.beforeTestAppInitializer()
     // Remote service, so won't be available on boot
     expect(appState.getWebService(serviceKey)).toBeUndefined()
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([targetMateID])
     // Service registered on message from mate
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey, ['10.5.0.121'])
     // Ensure, the ip from second mate is not available before the second mate sends message
     await higherOrderUtil.FAIL_waitUntilServiceRegistered(serviceKey, ['10.5.0.121', '10.5.0.161'])
     // Emit from second mate
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([secondMateID])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([secondMateID])
     // Expect service to contain both ips
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey, ['10.5.0.121', '10.5.0.161'])
   })
@@ -835,11 +835,11 @@ describe('Remote web service tests', () => {
     await appTestUtil.beforeTestAppInitializer()
     // Remote service, so won't be available on boot
     expect(appState.getWebService(serviceKey)).toBeUndefined()
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID!])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([targetMateID!])
     // Service registered on message from mate
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey, [targetIP])
     const webService = appState.getWebService(serviceKey)!
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 0,
       passing: webService.rise,
@@ -853,11 +853,11 @@ describe('Remote web service tests', () => {
     await appTestUtil.beforeTestAppInitializer()
     // Remote service, so won't be available on boot
     expect(appState.getWebService(serviceKey)).toBeUndefined()
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([targetMateID])
     // Service registered on message from mate
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey, [targetIP])
     const webService = appState.getWebService(serviceKey)!
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 0,
       passing: webService.rise,
@@ -866,32 +866,36 @@ describe('Remote web service tests', () => {
     // Poll count doesn't go beyond 'webService.rise'
     await higherOrderUtil.FAIL_waitForPollCount(webService, targetIP, webService.rise * 2)
     // Send "service-state-change" request
-    mateMockTest.emitServiceStateChangeMessageFromGivenMates([targetMateID], serviceKey, 2, 2)
+    remoteMateMockUtil.emitServiceStateChangeMessageFromGivenMates([targetMateID], serviceKey, 2, 2)
     // After "service-state-change" request, polling continuous again from start thereby, poll count will * 2
-    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise * 2)    
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise * 2)
   })
 
-  test('On "mate-disconnected", mark service "orphan" and do "local-service like" continuous polling ', async () => {
-    await appTestUtil.beforeTestAppInitializer()
+  test('On "mate-disconnected", mark service "orphan" and do "local-service like" continuous polling', async () => {
+    await appTestUtil.beforeTestAppInitializer({
+      // Using fake timers creates 'ping timeout' socket.io handshake issue
+      // Timeout is important in mate tests as it will trigger 'disconnect-remote-services' message, so using real time
+      additionalOptions: {useFakeTimer: false},
+    })
     // Remote service, so won't be available on boot
     expect(appState.getWebService(serviceKey)).toBeUndefined()
-    await mateMockTest.emitNewRemoteServicesFromGivenMates([targetMateID])
+    await remoteMateMockUtil.emitNewRemoteServicesFromGivenMates([targetMateID])
     // Service registered on message from mate
     await higherOrderUtil.waitUntilServiceRegistered(serviceKey, [targetIP])
     const webService = appState.getWebService(serviceKey)!
-    socketMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
+    remoteCaptainMockUtil.receive.healthCheckUpdateBroadcastFromAllPeers(webService, {
       ipAddress: targetIP,
       failing: 0,
       passing: webService.rise,
     })
     await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise)
     // Poll count doesn't go beyond 'webService.rise'
-    await higherOrderUtil.FAIL_waitForPollCount(webService, targetIP, webService.rise * 2)
+    jest.clearAllMocks()
+    await higherOrderUtil.FAIL_waitForPollCount(webService, targetIP, 1)
     // Disconnect mate
-    await mateMockTest.disconnectClients([targetMateID])
+    await remoteMateMockUtil.disconnectClients([targetMateID])
     jest.clearAllMocks()
     // After mate disconnection, polling continuous like local services
-    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise * 2)
+    await higherOrderUtil.waitForPollCount(webService, targetIP, webService.rise)
   })
-
 })

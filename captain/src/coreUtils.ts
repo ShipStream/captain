@@ -140,7 +140,6 @@ export async function initializeAppModules() {
   await appState.registerCaptainSocketServer(appConfig.CAPTAIN_PORT, {
     /* options */
   })
-  await webServiceHelper.processWebServiceFileYAML()
   // if HA mode, then consul agent running along-side each captain will decide the leader.
   if (isHAMode()) {
     await appState.registerConsulService()
@@ -148,10 +147,15 @@ export async function initializeAppModules() {
     // alternate leader election ( first URL is the captain )
     await checkAndPromoteToLeader()
   }
+  // Initialize static services
+  // Needs to be done before 'connectWithOtherCaptains', because, other captains will send 'updates' for these services,
+  // and we need it registered before that.
+  await webServiceHelper.processWebServiceFileYAML()
   await appState.connectWithOtherCaptains(
     appConfig.MEMBER_URLS.filter((eachMember: string) => eachMember !== appConfig.SELF_URL)
   )
-  // Mate operations is dependent on leadership, so initialize after leader selection above.
+  // The establish mate socket to receive and initialize dynamic services
+  // Mate operations is dependent on leadership, so initialize after leader selection code above.
   await appState.registerMateSocketServer(appConfig.MATE_PORT, {
     /* options */
   })

@@ -1,5 +1,4 @@
 import console from 'console'
-import appConfig from './../../src/appConfig.js'
 import {isAsyncFunction} from 'util/types'
 
 // Used to match any argument value during method spy/stub 'call' matching algorithm
@@ -9,7 +8,11 @@ async function advanceBothRealAndFakeTime(millis: number) {
   let timePassed = 0
   const incrementByMillis = 100
   while (true) {
-    await jest.advanceTimersByTimeAsync(incrementByMillis)
+    // if using fake timers, advance both real and fake
+    // else advance only real time.
+    if (usingFakeTimers()) {
+      await jest.advanceTimersByTimeAsync(incrementByMillis)
+    }
     await new Promise((resolve) => (global as any).originalSetTimeout(resolve, incrementByMillis))
     timePassed += incrementByMillis
     if (timePassed >= millis) {
@@ -181,7 +184,7 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
       console.log(`${logID}:waitUntilCalled`, {
         'instanceSpyData.calls?.length': instanceSpyData.calls?.length,
         matchingInvocationCount,
-        matchingCalls: JSON.stringify(matchingCalls)
+        // matchingCalls: JSON.stringify(matchingCalls)
       })
       return matchingCalls
     }

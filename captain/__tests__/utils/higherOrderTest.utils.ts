@@ -6,7 +6,7 @@ import {WebServiceManager} from '../../src/web-service/webServiceManager.js'
 import * as WebServiceHelper from '../../src/web-service/webServiceHelper.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
 import webAppTest from './appTest.utils.js'
-import {MockSocketClientManager} from './socketMockTest.utils.js'
+import {MockSocketClientManager} from './remoteCaptainMock.utils.js'
 
 
 /**
@@ -52,7 +52,7 @@ async function FAIL_waitForPollCount(
       5) *
     1000
   await expect(
-    commonTest.waitUntilCalled(webService, 'pollSuccess', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
+    commonTest.waitUntilCalled(webService, 'pollEachAddress', [MATCH_ANY_VALUE, targetIP], pollingCount, timeOutInMs)
   ).rejects.toThrow()
 }
 

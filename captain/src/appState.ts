@@ -114,7 +114,10 @@ class AppState {
       } else {
         const newWebService = await WebServiceManager.createRemoteWebService(mateID, serviceConf)
         this.setWebService(newWebService)
-        logger.info('createOrMergeRemoteWebService:created', newWebService.logID)
+        logger.debug('createOrMergeRemoteWebService:created', newWebService.logID, {
+          serviceConf: newWebService.serviceConf,
+          serviceState: newWebService.serviceState,
+        })
       }
     } finally {
       logger.info('======================================')

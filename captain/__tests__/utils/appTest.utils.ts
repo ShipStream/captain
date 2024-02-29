@@ -11,9 +11,9 @@ import technitiumDnsManager, {
   deleteZoneWithAllEntries,
 } from '../../src/dns/technitiumDnsManager.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
-import socketMockTest from './socketMockTest.utils.js'
-import mateMockTest from './mateMockTest.utils.js'
-import requestMockTest from './requestMockTest.utils.js'
+import socketMockTest from './remoteCaptainMock.utils.js'
+import mateMockTest from './remoteMateMock.utils.js'
+import requestMockTest from './requestMock.utils.js'
 
 function getPollingInterval(webService: WebServiceManager) {
   return webService.serviceState.status === WEB_SERVICE_STATUS.HEALTHY
@@ -33,12 +33,38 @@ jest.spyOn(WebServiceManager.prototype, 'beginFailOverProcess')
 jest.spyOn(WebServiceHelper.default, 'checkCombinedPeerStateAndInitiateAddActiveIP')
 jest.spyOn(WebServiceHelper.default, 'checkCombinedPeerStateAndInitiateRemoveActiveIP')
 
+/**
+ * Fake timers requires manual control/passage of time and for long process like 'initializeAppModules',
+ * we might require separate loop that advances time until the completion of 'initialization'
+ *
+ */
+async function inititalizeAppModulesUsingFakeTimers() {
+  let initializationState = undefined
+  let error = undefined
+  initializeAppModules().then((_data) => {
+    initializationState = true
+  }).catch((e) => {
+    error = e
+    initializationState = false
+  })
+  // until 'initializeAppModules' promise completes
+  while(initializationState === undefined) {
+    // advance time, so that any async-callback/setTimeout/setInterval in the 'initializeAppModules' get executed
+    await commonTest.passTimeInMillis(300)
+  }
+  if (error) {
+    throw error
+  }
+}
 
 async function beforeTestAppInitializer({
-  existingDnsRecords, patchedAppConfig
+  existingDnsRecords, patchedAppConfig, additionalOptions
 }: {
   existingDnsRecords?: {zoneRecord: string; ipAddresses: string[]}[],
-  patchedAppConfig?: any
+  patchedAppConfig?: any,
+  additionalOptions?: {
+    useFakeTimer?: boolean // Whether to use fake timer or real timer for the tests
+  },
 } = {}) {
   processAppEnvironement()
   Object.assign(appConfig, patchedAppConfig)
@@ -52,11 +78,15 @@ async function beforeTestAppInitializer({
     }
   }
   await commonTest.passTimeInMillis(2000)
-  jest.useFakeTimers()
+  if (additionalOptions?.useFakeTimer ?? true) {
+    jest.useFakeTimers()
+  }
   await socketMockTest.mockRemoteCaptains(getRemoteCaptains())
-  await mateMockTest.mockMateClients(mateMockTest.getMateIDs())
+  await commonTest.passTimeInMillis(1000)
   // initialize the modules during every test as it will be cleanedup/reset after each test
-  await initializeAppModules()
+  await inititalizeAppModulesUsingFakeTimers()
+  // await initializeAppModules()
+  await mateMockTest.mockMateClients(mateMockTest.getMateIDs())
   await commonTest.advanceBothRealAndFakeTime(1000)
   // setup '200' response all ips of all the loaded webServices
   // webAppTest.getMswServer().use(...webAppTest.failByNetworkErrorResponses([targetIP]))

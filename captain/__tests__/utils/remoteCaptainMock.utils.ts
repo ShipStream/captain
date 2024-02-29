@@ -15,19 +15,46 @@ const ioServers: {[key: string]: IOServer} = {}
 // Client connection from remote peers to the main test captain instance
 const mockClientSocketManagers: {[key: string]: MockSocketClientManager} = {}
 
+function acknowledge(ackCallback: Function | undefined, status: boolean, acknowledgedBy: string) {
+  if (ackCallback) {
+    ackCallback({
+      acknowledgedBy: acknowledgedBy,
+      status: status ? 'ok' : 'error',
+    })  
+  }  
+}
+
 export class MockSocketClientManager {
   clientSocket: ClientSocket
 
-  newLeader() {}
-  activeAddresses() {}
-  bulkActiveAddresses() {}
-  healthCheckRequest() {}
-  changePollingFrequency() {}
-  healthCheckUpdate() {}
-  bulkHealthCheckUpdate() {}
-  newRemoteServices() {}
-  mateDisconnected() {}
-  
+  newLeader(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'newLeader')
+  }
+  activeAddresses(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'activeAddresses')
+  }
+  bulkActiveAddresses(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'bulkActiveAddresses')
+  }
+  healthCheckRequest(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'healthCheckRequest')
+  }
+  changePollingFrequency(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'changePollingFrequency')
+  }
+  healthCheckUpdate(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'healthCheckUpdate')
+  }
+  bulkHealthCheckUpdate(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'bulkHealthCheckUpdate')
+  }
+  newRemoteServices(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'newRemoteServices')
+  }
+  mateDisconnected(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'mateDisconnected')
+  }
+
   constructor(targetServerUrl: string, clientCaptainUrl: string) {
     this.clientSocket = ioClient(targetServerUrl, {query: {token: getToken(), clientOrigin: clientCaptainUrl}})
     jest.spyOn(this.clientSocket, 'on')

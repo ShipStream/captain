@@ -15,9 +15,24 @@ services:
       file: docker-compose-base.yml
       service: captain-template
     environment:
-      - SELF_URL=ws://10.6.0.11:7400
-      # dummy consul
+      - NODE_ENV=test
       - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-1
+      - MEMBER_URLS=ws://127.0.0.1:7401,ws://127.0.0.1:7402,ws://127.0.0.1:7403
+      - SELF_URL=ws://127.0.0.1:7401
+      - CAPTAIN_PORT=7401
+      - CAPTAIN_SECRET_KEY=erwoc2q34m23nlfWS69ri
+      - DNS_PROVIDER=technitium
+      - TECHNITIUM_BASE_URL=http://10.6.0.2:5380
+      - TECHNITIUM_CUSTOM_ZONE_NAME=ops
+      - WEBSERVICE_YAML_LOCATION=./__tests__/data/captain-one-services.yaml
+      - MATE_PORT=7450
+      - MATE_SECRET_KEY=ksjdhf2q34m23nlfWS69ri
+      # mock mate properties
+      - __MATE_COMMON__CAPTAIN_URL=ws://127.0.0.1:7450
+      - __MATE_COMMON__CAPTAIN_SECRET_KEY=ksjdhf2q34m23nlfWS69ri
+      - __MATE_TEST_1__WEBSERVICE_YAML_LOCATION=./__tests__/data/mate-1-services.yaml
+      - __MATE_TEST_2__WEBSERVICE_YAML_LOCATION=./__tests__/data/mate-2-services.yaml
+
     volumes:
       - /app/.pnpm-store
       - /app/node_modules

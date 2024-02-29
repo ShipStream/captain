@@ -1,9 +1,9 @@
 import {ReadableStream} from 'stream/web'
 import {delay, http, passthrough, HttpResponse as mswHttpResponse, RequestHandlerOptions, RequestHandler} from 'msw'
 import {SetupServer, setupServer as setupMswServer} from 'msw/node'
-import appConfig from './../../src/appConfig.js'
-import {NotificationService} from './../../src/NotificationService.js'
-import { ConsulService } from './../../src/ConsulService.js'
+import appConfig from '../../src/appConfig.js'
+import {NotificationService} from '../../src/NotificationService.js'
+import { ConsulService } from '../../src/ConsulService.js'
 
 function passingResponses(ipList: Array<string>) {
   return ipList.map((eachIp) => {

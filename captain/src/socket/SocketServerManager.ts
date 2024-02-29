@@ -314,8 +314,8 @@ export class CaptainSocketServerManager {
   public async cleanUpForDeletion() {
     try {
       await closeGivenServer(this.io)
-    } catch (e) {
-      logger.error(e)
+    } catch (e: any) {
+      logger.error('CaptainSocketServerManager:cleanUpForDeletion', e?.message || e)
     }
   }
 

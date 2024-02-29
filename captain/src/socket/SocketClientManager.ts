@@ -13,6 +13,16 @@ import webServiceHelper, {
 } from '../web-service/webServiceHelper.js'
 import { logger, processMateDisconnection } from '../coreUtils.js'
 
+
+function acknowledge(ackCallback: Function | undefined, status: boolean, acknowledgedBy: string) {
+  if (ackCallback) {
+    ackCallback({
+      acknowledgedBy: acknowledgedBy,
+      status: status ? 'ok' : 'error',
+    })  
+  }  
+}
+
 /**
  * Register listener for listening to 'gossip' from other captain 'peers'
  * Maintain 'state' using class variables eg: captainUrl
@@ -35,12 +45,7 @@ export class SocketClientManager {
     try {
       appState.setLeaderUrl(payLoad.new)
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveNewLeader',
-          status: 'ok',
-        })  
-      }
+      acknowledge(ackCallback, true, 'receiveNewLeader')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: newLeader: Details: ${payLoad}`, {
@@ -48,12 +53,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveNewLeader',          
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveNewLeader')
     }
   }
 
@@ -67,12 +67,7 @@ export class SocketClientManager {
         logger.warn(`${this.logID}: activeAddresses: Unknown Service: ${payLoad.service}`)
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveActiveAddresses',
-          status: 'ok',
-        })  
-      }
+      acknowledge(ackCallback, true, 'receiveActiveAddresses')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: activeAddresses: Details: ${payLoad}`, {
@@ -80,12 +75,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveActiveAddresses',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveActiveAddresses')
     }
   }
 
@@ -97,12 +87,7 @@ export class SocketClientManager {
         await this.receiveActiveAddresses(eachPayLoad)
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveBulkActiveAddresses',
-          status: 'ok',
-        })  
-      }
+      acknowledge(ackCallback, true, 'receiveBulkActiveAddresses')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: bulkActiveAddresses: Details: ${payLoadArray}`, {
@@ -110,12 +95,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveBulkActiveAddresses',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveBulkActiveAddresses')
     }
   }
 
@@ -135,12 +115,7 @@ export class SocketClientManager {
         logger.warn(`${this.logID}: healthCheckRequest: Unknown Service: ${payLoad.service}`)
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveHealthCheckRequest',
-          status: 'ok',
-        })  
-      }
+      acknowledge(ackCallback, true, 'receiveHealthCheckRequest')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: healthCheckRequest: Details: ${payLoad}`, {
@@ -148,12 +123,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveHealthCheckRequest',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveHealthCheckRequest')
     }
   }
 
@@ -173,12 +143,7 @@ export class SocketClientManager {
         logger.warn(`${this.logID}: changePollingFrequency: Unknown Service: ${payLoad.service}`)
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveChangePollingFrequency',
-          status: 'ok',
-        })
-      }
+      acknowledge(ackCallback, true, 'receiveChangePollingFrequency')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: changePollingFrequency: Details: ${payLoad}`, {
@@ -186,12 +151,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveChangePollingFrequency',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveChangePollingFrequency')
     }
   }
 
@@ -241,12 +201,7 @@ export class SocketClientManager {
         logger.warn(`${this.logID}: healthCheckUpdate: Unknown Service: ${payLoad.service}`)
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveHealthCheckUpdate',
-          status: 'ok',
-        })
-      }
+      acknowledge(ackCallback, true, 'receiveHealthCheckUpdate')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: healthCheckUpdate: Details: ${payLoad}`, {
@@ -254,12 +209,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveHealthCheckUpdate',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveHealthCheckUpdate')
     }
   }
 
@@ -270,12 +220,7 @@ export class SocketClientManager {
         await this.receiveHealthCheckUpdate(eachPayLoad, undefined)
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveBulkHealthCheckUpdate',
-          status: 'ok',
-        })
-      }
+      acknowledge(ackCallback, true, 'receiveBulkHealthCheckUpdate')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: bulkHealthCheckUpdate: Details: ${payLoadArray}`, {
@@ -283,12 +228,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveBulkHealthCheckUpdate',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveBulkHealthCheckUpdate')
     }
   }
 
@@ -320,12 +260,7 @@ export class SocketClientManager {
       })
 
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveNewRemoteServices',
-          status: 'ok',
-        })
-      }
+      acknowledge(ackCallback, true, 'receiveNewRemoteServices')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: receiveNewRemoteServices: Details: ${payLoad}`, {
@@ -333,12 +268,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveNewRemoteServices',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveNewRemoteServices')
     }
   }
 
@@ -362,12 +292,7 @@ export class SocketClientManager {
         })
       }
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveMateDisconnected',
-          status: 'ok'
-        })
-      }
+      acknowledge(ackCallback, true, 'receiveMateDisconnected')
     } catch (e) {
       logger.error(
         new Error(`${this.logID}: receiveMateDisconnected: Details: ${payLoad}`, {
@@ -375,12 +300,7 @@ export class SocketClientManager {
         })
       )
       // optional socket 'acknowledgement' handling
-      if (ackCallback) {
-        ackCallback({
-          acknowledgedBy: 'receiveMateDisconnected',
-          status: 'error',
-        })
-      }
+      acknowledge(ackCallback, false, 'receiveMateDisconnected')
     }
   }
 
@@ -413,8 +333,8 @@ export class SocketClientManager {
   cleanUpForDeletion() {
     try {
       this.clientSocket.close()
-    } catch(e) {
-      logger.error(e)
+    } catch(e: any) {
+      logger.error('SocketClientManager:cleanUpForDeletion', e?.message || e)
     }
   }
 

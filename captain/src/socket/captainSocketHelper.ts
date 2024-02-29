@@ -30,7 +30,7 @@ export function closeGivenServer(server: IOServer) {
   return new Promise<void>((resolve, reject) => {
     server.close((err) => {
       if (err) {
-        logger.debug('Error closing connections', err)
+        logger.debug('Error closing connections', err?.message || err)
         return reject(err)
       }
       logger.debug('All connections closed')

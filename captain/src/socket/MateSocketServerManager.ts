@@ -50,8 +50,8 @@ export class MateSocketServerManager {
     socket.on("disconnect", async (reason) => {
       logger.info(logID, 'disconnect', {
         reasonForDisconnection: reason,
+        disconnectingMate: mateID,
         remainingOpenConnections: await this.getSocketDetails(),        
-        mateID,
       })
       this.onDisconnect(mateID)
     });
@@ -113,8 +113,8 @@ export class MateSocketServerManager {
   public async cleanUpForDeletion() {
     try {
       await closeGivenServer(this.io)
-    } catch (e) {
-      logger.error(e)
+    } catch (e: any) {
+      logger.error('MateSocketServerManager:cleanUpForDeletion', e?.message || e)
     }
   }
 

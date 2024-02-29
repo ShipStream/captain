@@ -82,22 +82,12 @@ export class MockMateClientManager {
 }
 
 async function mockMateClients(mateIDs: string[]) {
-  // console.log('mockMateClients:1', {
-  //   mateIDs
-  // })
   for (const eachMateID of mateIDs) {
     const mateConf = getMateConf(eachMateID)!
-    // console.log('mockMateClients:2', {
-    //   mateConf
-    // })  
     mockClientSocketManagers[eachMateID] = await MockMateClientManager.createMockSocketClient(
       mateConf.CAPTAIN_URL!,
       eachMateID
     )
-    // console.log('mockMateClients:2', {
-    //   mateConf,
-    //   mockClientSocketManagers
-    // })
   }
 }
 
@@ -146,21 +136,21 @@ let messageIDCounter = 1
  *
  */
 async function emitNewRemoteServicesFromGivenMates(mateList: string[]) {
-  // console.log('emitNewRemoteServicesFromGivenMates:1', {
-  //   mateList,
-  //   mockClientSocketManagers,
-  // })
+  console.log('emitNewRemoteServicesFromGivenMates:1', {
+    mateList,
+    mockClientSocketManagers,
+  })
   for (const eachMateID of mateList) {
     const mockSocketClientManager = mockClientSocketManagers[eachMateID]
-    // console.log('emitNewRemoteServicesFromGivenMates:2', {
-    //   mateList,
-    //   mockClientSocketManagers,
-    // })
+    console.log('emitNewRemoteServicesFromGivenMates:2', {
+      mateList,
+      mockClientSocketManagers,
+    })
     if (mockSocketClientManager) {
       const mateConf = getMateConf(eachMateID)!
-      // console.log('emitNewRemoteServicesFromGivenMates:3', {
-      //   mateConf,
-      // })
+      console.log('emitNewRemoteServicesFromGivenMates:3', {
+        mateConf,
+      })
       const servicesFile = await fs.readFile(mateConf.WEBSERVICE_YAML_LOCATION!, 'utf8')
       // console.log('emitNewRemoteServicesFromGivenMates:4', { servicesFile, file: mateConf.WEBSERVICE_YAML_LOCATION })
       const loadedYaml = YAML.parse(servicesFile)
