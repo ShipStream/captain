@@ -73,7 +73,7 @@ export class NotificationService {
         })}`
       )
     }
-    logger.info('datadog:postEvent', jsonResponse)
+    logger.debug('datadog:postEvent', jsonResponse)
   }
 
   constructSlackMessage(input: {
@@ -120,7 +120,7 @@ export class NotificationService {
         `${logID}: ${jsonResponse.error || 'Unknown Error'}: Details: ${JSON.stringify({...jsonResponse, fullUrl})}`
       )
     }
-    logger.info('slackService:postMessage', jsonResponse)
+    logger.debug('slackService:postMessage', jsonResponse)
   }
 
   async postGenericHttpNotification(data: {
@@ -142,7 +142,7 @@ export class NotificationService {
       method: 'POST',
       body: JSON.stringify(data),
     })
-    logger.info('customNotificationFetch', response)
+    logger.debug('customNotificationFetch', response)
   }
 
   constructor() {}
@@ -209,13 +209,14 @@ export class NotificationService {
     const serviceName = webService.serviceConf.name
     const serviceTags = webService.serviceConf.tags
     const zoneRecord = webService.serviceConf.zone_record
-    logger.info('Slack/Datadog/Generic HTTP success notification', {
+    logger.info('Slack/Datadog/Generic HTTP failure notification', {
       serviceKey: webService.serviceKey,
       serviceName,
       serviceTags,
       zoneRecord,
       added: ipsAdded,
       removed: ipsRemoved,
+      reason,
     })
     await this.postSlackMessage({
       zoneRecord,

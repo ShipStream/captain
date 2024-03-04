@@ -125,11 +125,11 @@ export async function promoteThisCaptainToLeader() {
 }
 
 export async function markGivenRemoteCaptainAsLeader(remoteLeaderURL: string) {
-  logger.info('makeThisCaptainAFollower', {
+  logger.info('markGivenRemoteCaptainAsLeader', {
     'appConfig.MEMBER_URLS': appConfig.MEMBER_URLS,
     remoteLeaderURL: remoteLeaderURL,
   })
-  logger.info('makeThisCaptainAFollower', 'I AM FOLLOWER')
+  logger.info('markGivenRemoteCaptainAsLeader', 'I AM FOLLOWER')
   appState.setLeaderUrl(remoteLeaderURL)
 }
 
@@ -171,27 +171,6 @@ export async function softReloadApp() {
   await initializeAppModules()
 }
 
-/**
- * Get all services belonging to the mate and 'mark' them as orphan and let captain take over polling
- *
- * @export
- */
-export async function processMateDisconnection(mateID: string) {
-  const logID = `processMateDisconnection:${mateID}`
-  logger.info(logID)
-  const allServices = appState.getWebServices()
-  for(const eachService of Object.values(allServices)) {
-    if (eachService.serviceConf.is_remote && eachService.containsMate(mateID)) {
-      logger.info(logID, eachService.serviceKey)
-      eachService.updateMateParameters(mateID, {
-        is_orphan: true,
-        last_update: new Date()
-      })
-      eachService.restartPolling()
-    }
-  }
-}
-
 /*
  * Helps avoid race-condition.
  * Uses 100ms intervals to check for released lock
@@ -221,7 +200,7 @@ export class CustomRaceConditionLock {
     // Honors only min-lock-hold-guarantee.
     // Doesn't offer any other guarantees. Keeping it simple.
     this._cleanLocksReference = setInterval(async () => {
-      logger.info(`CustomRaceConditionLock: Cleanup locks`)
+      logger.debug(`CustomRaceConditionLock: Cleanup locks`)
       for (const eachKey of Object.keys(this.lockedKeys)) {
         const lockHoldTime = Date.now() - this.lockedKeys[eachKey]
         if (lockHoldTime > CustomRaceConditionLock.minLockHoldGuarantee) {
@@ -284,11 +263,41 @@ export function isNetworkError(e: any) {
     `${e?.cause?.code}` === 'ENOTFOUND' ||
     `${e?.cause?.code}` === 'UND_ERR_CONNECT_TIMEOUT' ||
     `${e?.cause?.code}` === 'UND_ERR_SOCKET' ||
-    `${e?.cause?.code}` === 'ECONNRESET'
+    `${e?.cause?.code}` === 'ECONNRESET' ||
+    `${e?.cause?.code}` === 'EAI_AGAIN'
   ) {
     return true
   }
   return false
+}
+
+export type RETRY_OPTIONS = {
+  currentRetryAttempt: number;
+  maxAllowedRetries: number;
+}
+
+export function initRetryOptions(inputRetryOptions: any) {
+  const retryOptions: RETRY_OPTIONS = inputRetryOptions || {} as any
+  return Object.assign(retryOptions, {
+    currentRetryAttempt: inputRetryOptions?.currentRetryAttempt ?? 0,
+    maxAllowedRetries: inputRetryOptions?.maxAllowedRetries ?? MAX_ALLOWED_RETRIES,
+  }) as RETRY_OPTIONS
+}
+
+
+/**
+ *  Increments the retry count and calculate the wait time and wait it before the next retry 
+ *
+ */
+export async function incrementCountAndWaitBeforeRetry(logID: string, retryOptions: RETRY_OPTIONS, debugData?: any) {
+  retryOptions.currentRetryAttempt += 1
+  const waitTime = 5000 + 1500 * retryOptions.currentRetryAttempt
+  logger.warn(`${logID}: currentRetryAttempt`, {
+    attempt: retryOptions.currentRetryAttempt,
+    waitTime,
+    ...debugData || {}
+  })
+  await new Promise((resolve) => setTimeout(resolve, waitTime))
 }
 
 /**
@@ -298,12 +307,9 @@ export async function customFetch(
   logID: string,
   url: string,
   init?: RequestInit,
-  retryOptions: {currentRetryAttempt: number; maxAllowedRetries: number} = {} as any
+  retryOptions: RETRY_OPTIONS = {} as any
 ): Promise<any> {
-  retryOptions = Object.assign(retryOptions || {}, {
-    currentRetryAttempt: retryOptions?.currentRetryAttempt ?? 0,
-    maxAllowedRetries: retryOptions?.maxAllowedRetries ?? MAX_ALLOWED_RETRIES,
-  })
+  retryOptions = initRetryOptions(retryOptions)
   try {
     const response = await fetch(url, init)
     if (response.ok) {
@@ -316,15 +322,10 @@ export async function customFetch(
     if (isNetworkError(e)) {
       // wait and retry network errors
       if (retryOptions.currentRetryAttempt < MAX_ALLOWED_RETRIES) {
-        retryOptions.currentRetryAttempt += 1
-        const waitTime = 5000 + 1500 * retryOptions.currentRetryAttempt
-        logger.warn(`${logID}: currentRetryAttempt`, {
+        await incrementCountAndWaitBeforeRetry(logID, retryOptions, {
           url,
-          attempt: retryOptions.currentRetryAttempt,
           reason: e?.cause?.code,
-          waitTime,
         })
-        await new Promise((resolve) => setTimeout(resolve, waitTime))
         return customFetch(logID, url, init, retryOptions)
       }
     }

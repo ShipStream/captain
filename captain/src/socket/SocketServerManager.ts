@@ -4,7 +4,7 @@
 
 import {type ServerOptions, type Socket as ServerSocket, Server as IOServer, RemoteSocket} from 'socket.io'
 import jwt from 'jsonwebtoken'
-import { EVENT_NAMES, SOCKET_SERVER_LOG_ID, closeGivenServer} from './captainSocketHelper.js'
+import { EVENT_NAMES, SOCKET_SERVER_LOG_ID, acknowledge, closeGivenServer, receiveMateDisconnected, receiveNewRemoteServices} from './captainSocketHelper.js'
 import {WebServiceManager} from '../web-service/webServiceManager.js'
 import appConfig from '../appConfig.js'
 import appState from '../appState.js'
@@ -26,23 +26,23 @@ function retrieveClientOrigin(socket: ServerSocket | RemoteSocket<any, any>) {
  */
 async function transferCurrentState(socket: ServerSocket) {
   const clientOrigin = retrieveClientOrigin(socket)
-  logger.info(`transferCurrentState:${clientOrigin}:begin`)
+  logger.debug(`transferCurrentState:To:${clientOrigin}:begin`)
   // If leader, also transfer 'newLeader'
   if (appState.isLeader()) {
-    logger.info(`transferCurrentState:${clientOrigin}:sendNewLeaderToSocket`)
+    logger.debug(`transferCurrentState:To:${clientOrigin}:sendNewLeaderToSocket`)
     sendNewLeaderToSocket(socket, appState.getLeaderUrl()!)
   }
-  logger.info(`transferCurrentState:${clientOrigin}:sendAllRemoteServicesStateToSocket`)
+  logger.debug(`transferCurrentState:To:${clientOrigin}:sendAllRemoteServicesStateToSocket`)
   // Dynamic services needs to be transferred before health check and active addresses
   await sendAllRemoteServicesStateToSocket(socket)
-  logger.info(`transferCurrentState:${clientOrigin}:sendMyBulkHealthCheckUpdateToSocket`)
+  logger.debug(`transferCurrentState:To:${clientOrigin}:sendMyBulkHealthCheckUpdateToSocket`)
   sendMyBulkHealthCheckUpdateToSocket(socket)
   // If leader, also transfer 'activeAddresses'
   if (appState.isLeader()) {
-    logger.info(`transferCurrentState:${clientOrigin}:sendBulkActiveAddressesToSocket`)    
+    logger.debug(`transferCurrentState:To:${clientOrigin}:sendBulkActiveAddressesToSocket`)    
     sendBulkActiveAddressesToSocket(socket)
   }
-  logger.info(`transferCurrentState:${clientOrigin}:end`)
+  logger.debug(`transferCurrentState:To:${clientOrigin}:end`)
 }
 
 function constructBulkActiveAddressesMessage() {
@@ -95,17 +95,17 @@ async function sendAllRemoteServicesStateToSocket(socket: ServerSocket) {
   // Send one message per mate
   for(const eachMateID of Object.keys(mateVsServices)) {
     const eachMessage = {
-      // message_id: `resent-${eachMateID}-${++reSentRemoteServicesIDGenerator}`, // can be optional
+      message_id: appState.generateMessageID(EVENT_NAMES.NEW_REMOTE_SERVICES),
       mate_id: eachMateID,
       services: mateVsServices[eachMateID]
     }
     newRemoteServicePromises.push(socket.emitWithAck(EVENT_NAMES.NEW_REMOTE_SERVICES, eachMessage).catch((e) => {
       logger.error(`sendMyBulkRemoteServicesToSocket:NEW_REMOTE_SERVICES: ${eachMateID}`, e)
     }))
-    logger.info('sendMyBulkRemoteServicesToSocket:NEW_REMOTE_SERVICES', JSON.stringify(eachMessage, undefined, 2))
+    logger.debug('sendMyBulkRemoteServicesToSocket:NEW_REMOTE_SERVICES', JSON.stringify(eachMessage, undefined, 2))
   }
   const newRemoteServiceAckResponses = await Promise.all(newRemoteServicePromises)
-  logger.info('sendMyBulkRemoteServicesToSocket:newRemoteServiceAckResponses', newRemoteServiceAckResponses)
+  logger.debug('sendMyBulkRemoteServicesToSocket:newRemoteServiceAckResponses', newRemoteServiceAckResponses)
 
   // B). Construct and send multiple 'mate-disconnected' messages from existing state and send it to the newly connected captain
   const mateVsOrphanServices:{
@@ -125,16 +125,16 @@ async function sendAllRemoteServicesStateToSocket(socket: ServerSocket) {
   // Send one 'disconnect' message for each orphaned mate
   for(const eachMateID of Object.keys(mateVsOrphanServices)) {
     const eachMessage = {
+      message_id: appState.generateMessageID(EVENT_NAMES.MATE_DISCONNECTED),
       mate_id: eachMateID,
     }
     disconnectServicePromises.push(socket.emitWithAck(EVENT_NAMES.MATE_DISCONNECTED, eachMessage).catch((e) => {
       logger.error(`sendMyBulkRemoteServicesToSocket:MATE_DISCONNECTED: ${eachMateID}`, e)
     }))
-    logger.info('sendMyBulkRemoteServicesToSocket:MATE_DISCONNECTED', JSON.stringify(eachMessage, undefined, 2))
+    logger.debug('sendMyBulkRemoteServicesToSocket:MATE_DISCONNECTED', JSON.stringify(eachMessage, undefined, 2))
   }
-  await Promise.all(disconnectServicePromises)
-  const disconnectServiceAckResponses = await Promise.all(newRemoteServicePromises)
-  logger.info('sendMyBulkRemoteServicesToSocket:disconnectServiceAckResponses', disconnectServiceAckResponses)
+  const disconnectServiceAckResponses = await Promise.all(disconnectServicePromises)
+  logger.debug('sendMyBulkRemoteServicesToSocket:disconnectServiceAckResponses', disconnectServiceAckResponses)
 }
 
 /**
@@ -161,7 +161,7 @@ function sendMyBulkHealthCheckUpdateToSocket(socket: ServerSocket) {
       }
     }
   }
-  // console.log('bulkHealthCheckUpdates', bulkHealthCheckUpdates)
+  // logger.info('bulkHealthCheckUpdates', bulkHealthCheckUpdates)
   socket.emit(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, bulkHealthCheckUpdates)
 }
 
@@ -222,6 +222,30 @@ export class CaptainSocketServerManager {
   }
 
   /**
+   * Listeners for direct communication from a client ( instead of broadcast which is always from 'server' to 'client' )
+   * Direct/specific communication using a 'remote-captain-url' is done from 'client' to 'server',
+   * and this method has the listeners on the server side
+   *
+   * @param {ServerSocket} socket
+   */
+  private async registerListeners(socket: ServerSocket) {
+    const clientOrigin = retrieveClientOrigin(socket)
+    const logID = `${SOCKET_SERVER_LOG_ID}(Remote Client(event-sender): ${clientOrigin})`
+    socket.on(EVENT_NAMES.NEW_REMOTE_SERVICES, (payLoad, ackCallback) => {
+      logger.info(logID, EVENT_NAMES.NEW_REMOTE_SERVICES, {
+        payLoad
+      })
+      receiveNewRemoteServices(logID, payLoad, ackCallback)
+    })
+    socket.on(EVENT_NAMES.MATE_DISCONNECTED, (payLoad, ackCallback) => {
+      logger.info(logID, EVENT_NAMES.MATE_DISCONNECTED, {
+        payLoad
+      })
+      receiveMateDisconnected(logID, payLoad, ackCallback)
+    })
+  }
+
+  /**
    * Some basic listeners to log debugging messages about communication from this server
    *
    * @param {ServerSocket} socket
@@ -259,36 +283,49 @@ export class CaptainSocketServerManager {
    * @export
    */
   private setupConnectionAndListeners() {
+    // this.io.engine.use((req: any, res: any, next: any) => {
+    //   logger.info('req._query', req._query)
+    //   logger.info('req.url', req.url)
+    //   next()
+    // })
+  
     // jwt based authentication for socket connections between captain members
     this.io.use((socket, next) => {
-      // const logID = `${SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address})`
-      const token = retrieveToken(socket)
-      const clientOrigin = retrieveClientOrigin(socket)
-      if (clientOrigin) {
-        if (!appConfig.MEMBER_URLS.includes(clientOrigin)) {
-          return next(new Error(`Unknown clientOrigin: ${clientOrigin}`))
-        }
-      } else {
-        return next(new Error(`'clientOrigin' not set`))
-      }
-      this.remoteCaptainUrlVsServerSocket[clientOrigin]=socket
-      if (token) {
-        jwt.verify(
-          token,
-          appConfig.CAPTAIN_SECRET_KEY,
-          function (err: jwt.VerifyErrors | null, _data: string | jwt.JwtPayload | undefined) {
-            if (err) {
-              return next(new Error(`Socket authentication failed: reason: ${err?.message}`))
-            }
-            return next()
+      try {
+        logger.info(`IO.USE ${SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address})`)
+        // const logID = `${SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address})`
+        const token = retrieveToken(socket)
+        const clientOrigin = retrieveClientOrigin(socket)
+        if (clientOrigin) {
+          if (!appConfig.MEMBER_URLS.includes(clientOrigin)) {
+            return next(new Error(`Unknown clientOrigin: ${clientOrigin}`))
           }
-        )
-      } else {
-        return next(new Error(`Socket authentication 'token' not set`))
+        } else {
+          return next(new Error(`'clientOrigin' not set`))
+        }
+        this.remoteCaptainUrlVsServerSocket[clientOrigin]=socket
+        if (token) {
+          jwt.verify(
+            token,
+            appConfig.CAPTAIN_SECRET_KEY,
+            function (err: jwt.VerifyErrors | null, _data: string | jwt.JwtPayload | undefined) {
+              if (err) {
+                return next(new Error(`Socket authentication failed: reason: ${err?.message}`))
+              }
+              return next()
+            }
+          )
+        } else {
+          return next(new Error(`Socket authentication 'token' not set`))
+        }  
+      } catch(e) {
+        logger.error(`${SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address}`, e)
+        throw e
       }
     })
     this.io.on('connection', async (socket) => {
       this.registerDebugListeners(socket)
+      this.registerListeners(socket)
       await transferCurrentState(socket)
     })
     // this.io.engine.on('initial_headers', (headers, _req) => {
@@ -335,7 +372,7 @@ export class CaptainSocketServerManager {
    * @param {string} ipAddress
    */
   public broadcastRequestForHealthCheck(webService: WebServiceManager, ipAddress: string, verifyState?: HEALTH_CHECK_REQUEST_VERIFY_STATE) {
-    // logger.info('broadcastRequestForHealthCheck', ipAddress)
+    logger.info('broadcastRequestForHealthCheck', ipAddress)
     this.io.emit(EVENT_NAMES.HEALTH_CHECK_REQUEST, {
       member: appConfig.SELF_URL,
       service: webService.serviceKey,
@@ -400,7 +437,7 @@ export class CaptainSocketServerManager {
    */
   public broadcastActiveAddresses(webService: WebServiceManager) {
     const addresses = webService.serviceState.active
-    logger.info(`${webService.logID}: broadcastActiveAddresses: Details: ${addresses}`)          
+    logger.debug(`${webService.logID}: broadcastActiveAddresses: Details: ${addresses}`)          
     this.io.emit(EVENT_NAMES.ACTIVE_ADDRESSES, {
       service: webService.serviceKey,
       addresses: webService.serviceState.active,
@@ -426,33 +463,12 @@ export class CaptainSocketServerManager {
   }
 
   /**
-   * Send 'new-remote-services' message to the given captain by url
-   *
-   */
-  public sendNewRemoteServices(targetCaptainUrl: string, payLoad: any) {
-    logger.info('sendNewRemoteServices', {
-      targetCaptainUrl,
-      payLoad,
-      remoteCaptainUrlVsServerSocket: this.remoteCaptainUrlVsServerSocket,
-    })
-    this.remoteCaptainUrlVsServerSocket[targetCaptainUrl]!.emit(EVENT_NAMES.NEW_REMOTE_SERVICES, payLoad)
-  }
-
-  /**
    * Re-broadcast 'mate-disconnected' message from a 'mate' to to all connected 'captain' peers
    * Called only by 'leader'
    *
    */
   public broadcastMateDisconnected(payLoad: any) {
     this.io.emit(EVENT_NAMES.MATE_DISCONNECTED, payLoad)
-  }
-
-  /**
-   * Send 'mate-disconnected' message to the given captain by url
-   *
-   */
-  public sendMateDisconnected(targetCaptainUrl: string, payLoad: any) {
-    this.remoteCaptainUrlVsServerSocket[targetCaptainUrl]!.emit(EVENT_NAMES.MATE_DISCONNECTED, payLoad)
   }
 
 }

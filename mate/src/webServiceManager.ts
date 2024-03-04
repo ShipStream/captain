@@ -91,15 +91,16 @@ export class WebServiceManager {
   */
 
   /**
-   * Unique identifier for each web service
-   * Using 'zone_record' as serviceKey, maybe use 'name' ?
+   * Unique identifier for each web service,
+   * used to uniquely identify the service across the whole system ( captain peers, mates etc...)
+   * Using YAML 'name' key of the service as serviceKey
    */
   public get serviceKey() {
-    return this.serviceConf.zone_record
+    return this.serviceConf.name
   }
 
   get getPollingInterval(): number {
-    console.log('appConfig.INTERVAL', appConfig.INTERVAL)
+    logger.info('appConfig.INTERVAL', appConfig.INTERVAL)
     return appConfig.INTERVAL
   }
 
@@ -170,7 +171,7 @@ export class WebServiceManager {
       ),
       active: [], // will be set after initial Dns update query
     }
-    logger.info(this.serviceConf)
+    logger.debug(this.serviceConf)
   }
 
   // Factory to create webservice
@@ -215,7 +216,7 @@ export class WebServiceManager {
         }
       )
     }))
-    logger.info('getStateOfAdjacentIps', {
+    logger.debug('getStateOfAdjacentIps', {
       ipAddress,
       nextSetOfAddresses,
       noOfAddressesToBeScanned,
@@ -242,8 +243,8 @@ export class WebServiceManager {
   
     const eachIPLogID = `${this.pollLogID}: ${ipAddress}:`
     try {
-      logger.info(eachIPLogID, 'POLL-SUCCESS')
-      const oldStates = {...this.serviceState.checks}
+      logger.debug(eachIPLogID, 'POLL-SUCCESS')
+      // const oldStates = {...this.serviceState.checks}
       const oldStateForIP = { ...this.getChecksDataForGivenIP(ipAddress) }
       const oldWebServiceStatus = this.serviceState.status
       this.setStateForGivenIP(ipAddress, PASS_FAIL_IP_STATES.STATE_UP)
@@ -253,12 +254,12 @@ export class WebServiceManager {
       // Else, we do whole status recheck and send "SERVICE_STATE_CHANGE" if needed
       if (oldWebServiceStatus === WEB_SERVICE_STATUS.HEALTHY && oldStateForIP.state === PASS_FAIL_IP_STATES.STATE_UP) {
         // (STATE_UP) No change in state
-        logger.info(eachIPLogID, 'POLL-SUCCESS', 'No change in state', {
+        logger.debug(eachIPLogID, 'POLL-SUCCESS', 'No change in state', {
           oldStateForIP,
           oldWebServiceStatus
         })
       } else {
-        // STATE_UNKNOWN (OR) STATE_DOWN
+        // oldStateForIP.state was STATE_UNKNOWN (OR) STATE_DOWN
         if (this.serviceState.status === WEB_SERVICE_STATUS.HEALTHY) {
           // Service already "HEALTHY", so ip address "passing" can be ignored
           logger.info(eachIPLogID, 'POLL-SUCCESS', 'Service already "HEALTHY", so ip address "passing" can be ignored')
@@ -267,7 +268,7 @@ export class WebServiceManager {
           // a). Do additional health check and decide on "SERVICE_STATE_CHANGE" message to captain
           // b). As for 'POLL-SUCCESS' case, since one ip is enough for marking a service 'HEALTHY',
           // additional checks optional but done anyway here.
-          logger.info(eachIPLogID, 'POLL-SUCCESS', 'Do additional health check and decide on "SERVICE_STATE_CHANGE" message')
+          logger.debug(eachIPLogID, 'POLL-SUCCESS', 'Do additional health check and decide on "SERVICE_STATE_CHANGE" message')
           const stateOfIps = await this.pollAndGetStateOfAdjacentIps(pollLogID, ipAddress)
           stateOfIps.noOfUps += 1 //POLL-SUCCESS for the current ip
           const isServiceHealthyNow = stateOfIps.noOfUps > 0
@@ -293,7 +294,7 @@ export class WebServiceManager {
             // Service status "STATUS_NOT_SET", service just started and in that case,
             // captain already does the initial health checks, so "SERVICE_STATE_CHANGE" message not needed
             // just mark healthy or unhealthy
-            logger.info(eachIPLogID, 'POLL-SUCCESS', 'Service status was "STATUS_NOT_SET", service just started and in that case, captain already does the initial health checks, so "SERVICE_STATE_CHANGE" message not needed')
+            logger.debug(eachIPLogID, 'POLL-SUCCESS', 'Service status was "STATUS_NOT_SET", service just started and in that case, captain already does the initial health checks, so "SERVICE_STATE_CHANGE" message not needed')
             isServiceHealthyNow ? this.markHealthy() : this.markUnHealthy()
           }
         }        
@@ -317,14 +318,14 @@ export class WebServiceManager {
 
     const eachIPLogID = `${this.pollLogID}: ${ipAddress}:`
     try {
-      logger.info(eachIPLogID, 'POLL-FAILED')
-      const oldStates = {...this.serviceState.checks}
+      logger.debug(eachIPLogID, 'POLL-FAILED')
+      // const oldStates = {...this.serviceState.checks}
       const oldStateForIP = { ...this.getChecksDataForGivenIP(ipAddress) }
       const oldWebServiceStatus = this.serviceState.status
       this.setStateForGivenIP(ipAddress, PASS_FAIL_IP_STATES.STATE_DOWN)
       if (oldStateForIP.state === PASS_FAIL_IP_STATES.STATE_DOWN) {
         // (STATE_DOWN) No change in state
-        logger.info(eachIPLogID, 'POLL-FAILED', 'No change in state' , {
+        logger.debug(eachIPLogID, 'POLL-FAILED', 'No change in state' , {
           oldStateForIP,
           oldWebServiceStatus
         })
@@ -332,11 +333,11 @@ export class WebServiceManager {
         // STATE_UNKNOWN (OR) STATE_UP
         if (this.serviceState.status === WEB_SERVICE_STATUS.UN_HEALTHY) {
           // Service already "UN_HEALTHY", so ip address "failing" can be ignored
-          logger.info(eachIPLogID, 'POLL-FAILED', 'Service already "UN_HEALTHY", so ip address "failing" can be ignored')
+          logger.debug(eachIPLogID, 'POLL-FAILED', 'Service already "UN_HEALTHY", so ip address "failing" can be ignored')
         } else {
           logger.warn(eachIPLogID, 'POLL-FAILED', 'ALERT-POSSIBLE-SERVICE-STATUS-CHANGE')
           // Do additional health check and decide on "SERVICE_STATE_CHANGE" message to captain
-          logger.info(eachIPLogID, 'POLL-FAILED', 'Do additional health check and decide on "SERVICE_STATE_CHANGE" message')
+          logger.debug(eachIPLogID, 'POLL-FAILED', 'Do additional health check and decide on "SERVICE_STATE_CHANGE" message')
           const stateOfIps = await this.pollAndGetStateOfAdjacentIps(pollLogID, ipAddress)
           stateOfIps.noOfDowns += 1 //POLL-FAILED for the current ip
           const isServiceHealthyNow = stateOfIps.noOfUps > 0
@@ -362,7 +363,7 @@ export class WebServiceManager {
             // Service status "STATUS_NOT_SET", service just started and in that case,
             // captain already does the initial health checks, so 'SERVICE_STATE_CHANGE' message not needed
             // just mark healthy or unhealthy
-            logger.info(eachIPLogID, 'POLL-FAILED', 'Service status was "STATUS_NOT_SET", service just started and in that case, captain already does the initial health checks, so "SERVICE_STATE_CHANGE" message not needed')
+            logger.debug(eachIPLogID, 'POLL-FAILED', 'Service status was "STATUS_NOT_SET", service just started and in that case, captain already does the initial health checks, so "SERVICE_STATE_CHANGE" message not needed')
             isServiceHealthyNow ? this.markHealthy() : this.markUnHealthy()
           }
         }        

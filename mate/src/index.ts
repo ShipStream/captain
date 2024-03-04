@@ -18,25 +18,25 @@ process.on('SIGHUP', function () {
   console.info('received SIGHUP')
   softReloadApp().catch((err) => {
     console.info('Reinitialization with processServiceFileYAML failed, exiting...')
-    console.error(err)
+    console.error('SIGHUP:failed', err)
     shutdown()
   })
 })
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 process.on('unhandledRejection', (error, origin) => {
-  console.error(origin, error)
+  console.error('unhandledRejection', origin, error)
   process.exit(1)
 })
 process.on('uncaughtException', (error, origin) => {
-  console.error(origin, error)
+  console.error('uncaughtException', origin, error)
   process.exit(1)
 })
 
 const app = express()
 const httpServer = createServer(app)
 httpServer.listen(80, async function () {
-  console.info(`App listening at: 40`, httpServer?.address?.())
+  console.info(`App listening at:`, httpServer?.address?.())
   // logger.info('appConfig', {
   //   appConfig,
   // })
@@ -44,7 +44,7 @@ httpServer.listen(80, async function () {
     await initializeAppModules()
   } catch (err) {
     console.info('Initialization failed, exiting...')
-    console.error(err)
+    console.error('Initialization:failed', err)
     shutdown()
   }
 })

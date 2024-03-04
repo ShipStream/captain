@@ -71,15 +71,13 @@ export const logger = appConfig.NODE_ENV === 'test' ? console : new Logger()
 async function processWebServiceFileYAML() {
   logger.info('processServiceFileYAML')
   if (existsSync(appConfig.WEBSERVICE_YAML_LOCATION)) {
-    logger.info('processServiceFileYAML:1')
     const servicesFile = await fs.readFile(appConfig.WEBSERVICE_YAML_LOCATION, 'utf8')
     const loadedYaml = YAML.parse(servicesFile)
-    // logger.info('processServiceFileYAML:2', {
-    //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
-    // });
+    logger.debug('processServiceFileYAML', {
+      loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
+    });
     await appState.registerWebServices(loadedYaml?.services)
   } else {
-    logger.info('processServiceFileYAML:2')
     throw new Error(`WebService YAML file location invalid: ${appConfig.WEBSERVICE_YAML_LOCATION}`)
   }
 }
@@ -160,7 +158,7 @@ export class CustomRaceConditionLock {
     // Honors only min-lock-hold-guarantee.
     // Doesn't offer any other guarantees. Keeping it simple.
     this._cleanLocksReference = setInterval(async () => {
-      logger.info(`CustomRaceConditionLock: Cleanup locks`)
+      logger.debug(`CustomRaceConditionLock: Cleanup locks`)
       for (const eachKey of Object.keys(this.lockedKeys)) {
         const lockHoldTime = Date.now() - this.lockedKeys[eachKey]
         if (lockHoldTime > CustomRaceConditionLock.minLockHoldGuarantee) {

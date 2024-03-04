@@ -1,35 +1,35 @@
 1). manage captain and mates
-eg: dns-orchestrator-dev-captain-1
+eg: captain-1
 
-docker pause  `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'`
-docker unpause  `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'`
-docker restart  `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'`
+docker pause  `docker ps | grep captain-1 | awk 'NR==1{print $1}'`
+docker unpause  `docker ps | grep captain-1 | awk 'NR==1{print $1}'`
+docker restart  `docker ps | grep captain-1 | awk 'NR==1{print $1}'`
 
-docker stop  `docker ps -a| grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'`
-docker start  `docker ps -a| grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'`
+docker stop  `docker ps -a| grep captain-1 | awk 'NR==1{print $1}'`
+docker start  `docker ps -a| grep captain-1 | awk 'NR==1{print $1}'`
 
 # is container running
-docker container inspect -f '{{.State.Running}}'  `docker ps -a| grep dns-orchestrator-dev-mate-1 | awk 'NR==1{print $1}'`
+docker container inspect -f '{{.State.Running}}'  `docker ps -a| grep mate-1 | awk 'NR==1{print $1}'`
 
 2). logs for captain and mates
-docker logs `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'` -f -n 10
-docker logs `docker ps | grep dns-orchestrator-dev-captain-2 | awk 'NR==1{print $1}'` -f -n 10
-docker logs `docker ps | grep dns-orchestrator-dev-captain-3 | awk 'NR==1{print $1}'` -f -n 10
+docker logs `docker ps | grep captain-1 | awk 'NR==1{print $1}'` -f -n 10
+docker logs `docker ps | grep captain-2 | awk 'NR==1{print $1}'` -f -n 10
+docker logs `docker ps | grep captain-3 | awk 'NR==1{print $1}'` -f -n 10
 
-docker logs `docker ps | grep dns-orchestrator-dev-mate-1 | awk 'NR==1{print $1}'` -f -n 10
-docker logs `docker ps | grep dns-orchestrator-dev-mate-2 | awk 'NR==1{print $1}'` -f -n 10
+docker logs `docker ps | grep mate-1 | awk 'NR==1{print $1}'` -f -n 10
+docker logs `docker ps | grep mate-2 | awk 'NR==1{print $1}'` -f -n 10
 
 3). manage dummy-consul
 a).logs
-docker logs `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk 'NR==1{print $1}'` -f -n 10
+docker logs `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` -f -n 10
 
 b).elect random leader
-docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-1/elect-random-leader
+docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/elect-random-leader
 
 c).make the given node a leader
-docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-1/make-leader
-docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-2/make-leader
-docker exec `docker ps | grep dns-orchestrator-dev-consul-dummy-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-3/make-leader
+docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-1/make-leader
+docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-2/make-leader
+docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-3/make-leader
 
 4). manage web apps
 a).all ips (up/down) needs to be added to 'multi-ip-dummy-web-app' definition container in compose file
@@ -37,18 +37,18 @@ a).all ips (up/down) needs to be added to 'multi-ip-dummy-web-app' definition co
 b).check health manually
 eg: 10.5.0.121
 
-docker exec -ti `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'` curl -vs http://10.5.0.121/health
+docker exec -ti `docker ps | grep captain-1 | awk 'NR==1{print $1}'` curl -vs http://10.5.0.121/health
 
 c).UP/DOWN/DELAY
 eg: 10.5.0.121
 
 UP).
-docker exec -ti `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'` curl -H 'Content-Type: application/json' -X POST http://10.5.0.121/up
+docker exec -ti `docker ps | grep captain-1 | awk 'NR==1{print $1}'` curl -H 'Content-Type: application/json' -X POST http://10.5.0.121/up
 
 
 timeout).
-docker exec -ti `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'` curl -H 'Content-Type: application/json' -X POST http://10.5.0.121/delay
+docker exec -ti `docker ps | grep captain-1 | awk 'NR==1{print $1}'` curl -H 'Content-Type: application/json' -X POST http://10.5.0.121/delay
 
 DOWN).
-docker exec -ti `docker ps | grep dns-orchestrator-dev-captain-1 | awk 'NR==1{print $1}'` curl -H 'Content-Type: application/json' -X POST http://10.5.0.121/down
+docker exec -ti `docker ps | grep captain-1 | awk 'NR==1{print $1}'` curl -H 'Content-Type: application/json' -X POST http://10.5.0.121/down
 

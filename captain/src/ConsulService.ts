@@ -59,7 +59,9 @@ export class ConsulService {
     if (response.status === CONSUL_QUERY_STATUS.SUCCESS) {
       const consul = response?.data?.Stats?.consul
       const isLeaderByConsul = consul?.leader === 'true'
-      logger.info('reAffirmLeadership:isLeaderByConsul', isLeaderByConsul)
+      if (!isLeaderByConsul) {
+        logger.warn('reAffirmLeadership:failed', { isLeaderByConsul })
+      }
       return isLeaderByConsul
     }
     return false
@@ -73,14 +75,16 @@ export class ConsulService {
       if (response.status === CONSUL_QUERY_STATUS.SUCCESS) {
         const consul = response?.data?.Stats?.consul
         const isLeaderByConsul = consul?.leader === 'true'
-        logger.info('handleLatestConsulStats:consul.isLeader', isLeaderByConsul)
         if (isLeaderByConsul) {
           if (!appState.isLeader()) {
             // if not already a leader, promote to leader
+            logger.info('Promote to leader', { isLeaderByConsul })
             await promoteThisCaptainToLeader()
           } else {
-            logger.info('Already the leader nothing to do.')
+            logger.debug('Already the leader nothing to do.')
           }
+        } else {
+          logger.debug('Not a leader by consul, nothing to do. Leadership details will be received by "new-leader" notification', { isLeaderByConsul })
         }
       } else if (response.status === CONSUL_QUERY_STATUS.SERVICE_UNAVAILABLE) {
         logger.warn('handleLatestConsulStats:CONSUL_QUERY_STATUS.SERVICE_UNAVAILABLE. Use fallbackAlgorithm')

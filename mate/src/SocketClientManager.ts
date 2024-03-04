@@ -19,15 +19,14 @@ export const SOCKET_CLIENT_LOG_ID = 'CAPTAIN-SOCKET-CLIENT'
 
 export function getToken() {
   const currentDate = new Date()
-  const expiryDate = new Date()
-  expiryDate.setHours(expiryDate.getMinutes() + 2)
   const payLoad = {
     sub: appConfig.MATE_ID,
     iat: currentDate.getTime(),
     type: 'ACCESS_TOKEN',
-    exp: expiryDate.getTime(),
   }
-  return jwt.sign(payLoad, appConfig.CAPTAIN_SECRET_KEY)
+  return jwt.sign(payLoad, appConfig.CAPTAIN_SECRET_KEY, {
+    expiresIn: 120
+  })
 }
 
 /**
@@ -50,10 +49,10 @@ export async function registerClientDebugListeners(clientSocket: ClientSocket, s
     // else the socket will automatically try to reconnect
   })
   clientSocket.onAnyOutgoing((event, args) => {
-    logger.debug(`${logID}: onAnyOutgoing`, event, JSON.stringify(args))
+    logger.debug(`${logID}: outgoingMessage`, event, JSON.stringify(args))
   })
   clientSocket.onAny((event, args) => {
-    logger.debug(`${logID}: onAnyIncoming`, event, JSON.stringify(args))
+    logger.debug(`${logID}: incomingMessage`, event, JSON.stringify(args))
   })
 }
 
@@ -77,28 +76,33 @@ export class SocketClientManager {
   }
 
   private async setupConnectionAndListeners() {
-    // Called on reconnect too, so 'reconnect' event not needed
     this.clientSocket.on('connect', () => {
       logger.info(`${this.logID}: connect`)
       this.onConnect()
     })
-    // this.clientSocket.io.on('reconnect', () => {
-    //   logger.info(`${this.logID}: reconnect`)
-    //   this.onReconnect()
-    // })
+    // 'connect' called on reconnect too, so 'reconnect' event not needed,
+    // to invoke the 'sendNewRemoteServices' logic
+    this.clientSocket.io.on('reconnect', () => {
+      logger.info(`${this.logID}: reconnect`)
+    })
   }
 
   constructor(remoteCaptainUrl: string) {
-    this.remoteCaptainUrl = remoteCaptainUrl
-    this.clientSocket = io(this.remoteCaptainUrl, { query: { token: getToken(), clientOrigin: appConfig.MATE_ID } })
-    this.logID = `${SOCKET_CLIENT_LOG_ID}(To ${this.remoteCaptainUrl})`
+    try {
+      this.remoteCaptainUrl = remoteCaptainUrl
+      this.clientSocket = io(this.remoteCaptainUrl, { query: { token: getToken(), clientOrigin: appConfig.MATE_ID } })
+      this.logID = `${SOCKET_CLIENT_LOG_ID}(To ${this.remoteCaptainUrl})`  
+    } catch(e) {
+      logger.error(`Error:${SOCKET_CLIENT_LOG_ID}(To ${remoteCaptainUrl})`)
+      throw e
+    }
   }
 
   cleanUpForDeletion() {
     try {
       this.clientSocket.close()
     } catch(e) {
-      logger.error(e)
+      logger.error('cleanUpForDeletion', e)
     }
   }
 
@@ -111,7 +115,7 @@ export class SocketClientManager {
   }
 
   sendServiceStateChangeMessage(webServiceManager: WebServiceManager, healthy: number) {
-    console.log(this.logID, 'sendServiceStateChangeMessage')
+    logger.warn(this.logID, 'sendServiceStateChangeMessage')
     this.clientSocket.emit(MATE_EVENT_NAMES.SERVICE_STATE_CHANGE, {
       mate_id: appConfig.MATE_ID,
       service: webServiceManager.serviceKey,
@@ -121,19 +125,20 @@ export class SocketClientManager {
   }
 
   sendNewRemoteServices() {
-    console.log(this.logID, 'sendNewRemoteServices')
+    logger.info(this.logID, 'sendNewRemoteServices:begin')
     const servicesPayload = Object.values(appState.getWebServices()).map((eachService) => {
       const serviceConf: Partial<typeWebServiceConf> = { ...eachService.serviceConf }
       // Send everything except 'mate' property from yaml data
       delete serviceConf.mate;
       return serviceConf
     })
-    console.log(this.logID, 'sendNewRemoteServices', { servicesPayload })
+    logger.info(this.logID, 'sendNewRemoteServices:processing', servicesPayload.map((eachService) => eachService.name))
     this.clientSocket.emit(MATE_EVENT_NAMES.NEW_REMOTE_SERVICES, {
-      message_id: `${appConfig.MATE_ID}-${nanoid()}`,
+      message_id:  appState.generateMessageID(MATE_EVENT_NAMES.NEW_REMOTE_SERVICES),
       mate_id: appConfig.MATE_ID,
       services: servicesPayload
     })
+    logger.info(this.logID, 'sendNewRemoteServices:complete')
   }
 
 }

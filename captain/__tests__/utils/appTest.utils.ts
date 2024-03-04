@@ -47,10 +47,14 @@ async function inititalizeAppModulesUsingFakeTimers() {
     error = e
     initializationState = false
   })
-  // until 'initializeAppModules' promise completes
+  // until 'initializeAppModules' promise completes, advance time
   while(initializationState === undefined) {
-    // advance time, so that any async-callback/setTimeout/setInterval in the 'initializeAppModules' get executed
-    await commonTest.passTimeInMillis(300)
+    // advance set amount of 'fake-time' for the given amount of 'real-time' in each loop,
+    // so that any async-callback/setTimeout/setInterval in the 'initializeAppModules' gets executed
+    await commonTest.passRealTimeInMillis(50) // wait for the passage of realtime
+    if (commonTest.usingFakeTimers()) {
+      await jest.advanceTimersByTimeAsync(150) // advance faketime
+    }
   }
   if (error) {
     throw error

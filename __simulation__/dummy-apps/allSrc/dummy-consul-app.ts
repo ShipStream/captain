@@ -32,6 +32,7 @@ const consulDummyResponses: {
 }[] = []
 
 function setupNode(nodeIndex: number) {
+  const routerPrefix = `/consul-${nodeIndex + 1}`
   consulDummyResponses.push({
     Stats: {
       Config: {
@@ -47,17 +48,19 @@ function setupNode(nodeIndex: number) {
   })
   const eachConsulRouter = express.Router()
   eachConsulRouter.get('/v1/agent/self', (req, res) => {
+    console.log(`${routerPrefix}/v1/agent/self: called`)
     res.json(consulDummyResponses[nodeIndex])
   })
   eachConsulRouter.post('/make-leader', (req, res) => {
+    console.log(`${routerPrefix}/make-leader: called`)
     // make everything follower to prevent dual leadship
     makeAllFollowers()
     // then make this a leader
     consulDummyResponses[nodeIndex]!.Stats.consul.leader = 'true'
     res.json({success: true, data: consulDummyResponses[nodeIndex]})
   })
-  console.log('router-bash:1', `consul-${nodeIndex + 1}`)
-  app.use(`/consul-${nodeIndex + 1}`, eachConsulRouter)
+  console.log({ routerPrefix })
+  app.use(`${routerPrefix}`, eachConsulRouter)
 }
 
 for (let nodeIndex = 0; nodeIndex < NUMBER_OF_NODES; nodeIndex++) {
@@ -89,11 +92,13 @@ function electRandomLeader() {
 consulDummyResponses[2]!.Stats.consul.leader = 'true'
 
 app.post('/make-all-followers', (req, res) => {
+  console.log('make-all-followers: called')
   makeAllFollowers()
   res.json({success: true})
 })
 
 app.post('/elect-random-leader', (req, res) => {
+  console.log('elect-random-leader: called')
   electRandomLeader()
   res.json({success: true})
 })

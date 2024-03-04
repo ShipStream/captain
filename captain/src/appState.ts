@@ -64,18 +64,32 @@ class AppState {
       logger.info('registerLocalWebServices:initiate', serviceConf.name)
       registerServicePromises.push(
         WebServiceManager.createLocalWebService(serviceConf).then((webService: WebServiceManager) => {
-          logger.info('registerLocalWebServices:success', webService.serviceKey)
           this.setWebService(webService)
+          logger.info('registerLocalWebServices:success', webService.serviceKey)          
         })
       )
     }
-    logger.info('registerLocalWebServices:initiateAll')
     await Promise.all(registerServicePromises)
     logger.info('registerLocalWebServices:completeAll')
   }
 
   // Processing all mate services is an expensive operation and hence using message_id key to avoid reprocessing
   processedRemoteMessages: {[key: string]: number} = {}
+
+  markRemoteMessageProcessed(messageID: string) {
+    const processingDateTime = Date.now()
+    this.processedRemoteMessages[messageID] = processingDateTime
+  }
+
+  isRemoteMessageAlreadyProcessed(messageID: string) {
+    // Check the message processed cached and return status
+    // MessageID can be optional too, mostly in case of bulk messages, so skip uniqueness check when not present
+    if (!messageID || !this.processedRemoteMessages[messageID]) {
+      return false
+    }
+    return true
+  }
+
   cleanUpProcessedMessageIDTrackerRef: any
   // Cleanup handler for above object 'processedRemoteMessages'
   initCleanUpProcessedMessageIDTracker() {
@@ -87,7 +101,7 @@ class AppState {
         if (timePassedInSeconds > 900) {
           //15 mintues older, delete to free up memory
           delete this.processedRemoteMessages[eachMessageID]
-          console.log('cleanupMessageTracker', {eachMessageID, timePassedInSeconds})
+          logger.debug('cleanupMessageTracker', {eachMessageID, timePassedInSeconds})
         }
       }
     }, 60 * 1000)
@@ -114,15 +128,13 @@ class AppState {
       } else {
         const newWebService = await WebServiceManager.createRemoteWebService(mateID, serviceConf)
         this.setWebService(newWebService)
-        logger.debug('createOrMergeRemoteWebService:created', newWebService.logID, {
+        logger.info('createOrMergeRemoteWebService:created', newWebService.logID)
+        logger.debug('createOrMergeRemoteWebService:created:details', newWebService.logID, {
           serviceConf: newWebService.serviceConf,
           serviceState: newWebService.serviceState,
         })
       }
     } finally {
-      logger.info('======================================')
-      logger.info('createOrMergeRemoteWebService:released', raceCondLock)
-      logger.info('======================================')
       appState.getRaceHandler().releaseLock(raceCondLock)
     }
   }
@@ -135,29 +147,52 @@ class AppState {
    * @param {typeWebServiceConf []} serviceConfs
    */
   async registerRemoteMateWebServices(messageID: string, mateID: string, serviceConfs: typeWebServiceConf[]) {
-    logger.debug('registerRemoteMateWebServices', {
+    const logID = `registerRemoteMateWebServices:${mateID}:${messageID}:`
+    logger.debug(logID, 'details:', {
       messageID,
       mateID,
       serviceConfs,
       lastProcessed: this.processedRemoteMessages[messageID],
     })
     // Check and do processing only if it is not already processed for performance reasons.
-    // But messageID can be optional too, mostly in case of bulk messages, don't worry about uniqueness when not present
-    if (!messageID || !this.processedRemoteMessages[messageID]) {
-      const processingDateTime = Date.now()
-      logger.info('registerRemoteMateWebServices:processing', {messageID, processingDateTime})
-      this.processedRemoteMessages[messageID] = processingDateTime
+    if (!this.isRemoteMessageAlreadyProcessed(messageID)) {
+      logger.info(logID ,'processing')
+      this.markRemoteMessageProcessed(messageID)
       const registerServicePromises = []
       for (const serviceConf of serviceConfs) {
         registerServicePromises.push(this.createOrMergeRemoteWebService(mateID, serviceConf))
       }
       await Promise.all(registerServicePromises)
-      logger.info('registerRemoteMateWebServices:complete', {messageID, processingDateTime})
+      logger.info(logID ,'complete')
     } else {
-      logger.info('registerRemoteMateWebServices:already processed', {
-        messageID,
-        mateID,
-      })
+      logger.info(logID ,'already processed')
+    }
+  }
+
+  /**
+   * Get all services belonging to the mate and 'mark' them as orphan and let captain take over polling
+   *
+   * @export
+   */
+  async processMateDisconnection(messageID: string, mateID: string) {
+    const logID = `processMateDisconnection:${mateID}:${messageID}:`
+    if (!this.isRemoteMessageAlreadyProcessed(messageID)) {
+      logger.info(logID, 'processing')
+      this.markRemoteMessageProcessed(messageID)
+      const allServices = appState.getWebServices()
+      for(const eachService of Object.values(allServices)) {
+        if (eachService.serviceConf.is_remote && eachService.containsMate(mateID)) {
+          logger.info(logID, eachService.serviceKey)
+          eachService.updateMateParameters(mateID, {
+            is_orphan: true,
+            last_update: new Date()
+          })
+          eachService.restartPolling()
+        }
+      }
+      logger.info(logID, 'complete')
+    } else {
+      logger.info(logID, 'already processed')
     }
   }
 
@@ -347,18 +382,18 @@ class AppState {
   }) {
     this.cleanUpProcessedRemoteMessageTracker()    
     if (resetSockets) {
-      // console.log('softReloadApp:Step1:terminate socket server connections')
+      // logger.info('softReloadApp:Step1:terminate socket server connections')
       await this.getSocketManager()?.cleanUpForDeletion()
-      // console.log('softReloadApp:Step2:terminate socket client connections')
+      // logger.info('softReloadApp:Step2:terminate socket client connections')
       const remoteCaptains = Object.keys(this.getAllClientSocketManagers())
       for (const eachRemoteCaptainUrl of remoteCaptains) {
-        // console.log('softReloadApp:eachRemoteCaptainUrl', eachRemoteCaptainUrl)
+        // logger.info('softReloadApp:eachRemoteCaptainUrl', eachRemoteCaptainUrl)
         this.deleteClientSocketManagerByRemoteUrl(eachRemoteCaptainUrl)
       }
       await this.getMateSocketManager()?.cleanUpForDeletion()
     }
     if (resetWebApps) {
-      // console.log('softReloadApp:Step3:delete all webservices')
+      // logger.info('softReloadApp:Step3:delete all webservices')
       const webServicesKeys = Object.keys(this.getWebServices())
       for (const eachServiceKey of webServicesKeys) {
         this.deleteWebService(eachServiceKey)
@@ -372,6 +407,18 @@ class AppState {
       this.setLeaderUrl(undefined)
     }
   }
+
+  messageIDCounter = 1
+
+  /**
+   * Unique id to identify each message sent over the socket,
+   * helps avoid message processing duplication
+   *
+   * @export
+   */
+  generateMessageID(messageType: string) {
+    return `ID/${appConfig.SELF_URL}/${messageType}/${++this.messageIDCounter}/${new Date().toISOString()}`
+  }  
 }
 
 const appState = new AppState()

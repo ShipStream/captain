@@ -74,10 +74,10 @@ class AppState {
       appState.getSocketManager().cleanUpForDeletion()
     }
     if (resetWebApps) {
-      // console.log('softReloadApp:Step3:delete all webservices')
+      // logger.info('softReloadApp:Step3:delete all webservices')
       const webServicesKeys = Object.keys(appState.getWebServices())
       for (const eachServiceKey of webServicesKeys) {
-        // console.log('softReloadApp:eachServiceKey', eachServiceKey)
+        // logger.info('softReloadApp:eachServiceKey', eachServiceKey)
         this.deleteWebService(eachServiceKey)
       }
     }
@@ -177,6 +177,18 @@ class AppState {
       }
     }
   }
+
+  messageIDCounter = 1
+
+  /**
+   * Unique id to identify each message sent over the socket,
+   * helps avoid message processing duplication
+   *
+   * @export
+   */
+  generateMessageID(messageType: string) {
+    return `ID/${appConfig.MATE_ID}/${messageType}/${++this.messageIDCounter}/${new Date().toISOString()}`
+  }  
 
 }
 

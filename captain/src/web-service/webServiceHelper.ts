@@ -104,16 +104,13 @@ async function processWebServiceFileYAML() {
     file: appConfig.WEBSERVICE_YAML_LOCATION
   })
   if (existsSync(appConfig.WEBSERVICE_YAML_LOCATION)) {
-    logger.info('processServiceFileYAML:1')
     const servicesFile = await fs.readFile(appConfig.WEBSERVICE_YAML_LOCATION, 'utf8')
-    logger.info('processServiceFileYAML:2')
     const loadedYaml = YAML.parse(servicesFile)
-    // logger.info('processServiceFileYAML:3', {
-    //   loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
-    // });
+    logger.debug('processServiceFileYAML', {
+      loadedYaml: JSON.stringify(loadedYaml, undefined, 2)
+    });
     await appState.registerLocalWebServices(loadedYaml?.services)
   } else {
-    logger.info('processServiceFileYAML:11')
     throw new Error(`WebService YAML file location invalid: ${appConfig.WEBSERVICE_YAML_LOCATION}`)
   }
 }
@@ -155,7 +152,7 @@ async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServi
   const logID = `${webService?.logID}: checkCombinedPeerStateAndInitiateAddActiveIP ip: ${ipAddress}`
   let raceCondLock
   try {
-    logger.info(logID)
+    logger.debug(logID)
     // console.trace(new Date().toUTCString(), logID)
     // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
     raceCondLock = await appState.getRaceHandler().getLock(webService.logID)
@@ -210,7 +207,7 @@ async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServi
             logger.info(logID, 'Ignore. Neither "multi" nor "unhealthy"')
           }
         } else {
-          logger.info(logID, `Ignore. Already part of active addresses: ${activeAddresses}`)
+          logger.debug(logID, `Ignore. Already part of active addresses: ${activeAddresses}`)
         }
       }
     }
@@ -235,7 +232,7 @@ async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
   const logID = `${webService?.logID}: checkCombinedPeerStateAndInitiateRemoveActiveIP ip: ${ipAddress}`
   let raceCondLock
   try {
-    logger.info(logID)
+    logger.debug(logID)
     // console.trace(new Date().toUTCString(), logID)
     // Don't use logID!. Only use webService.logID, so as to lock across several operations of the webservice
     raceCondLock = await appState.getRaceHandler().getLock(webService.logID)
@@ -255,23 +252,21 @@ async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
         return
       }
       const activeAddresses = webService.serviceState.active || []
-      logger.info(logID, 'stage:1', activeAddresses)
+      logger.debug(logID, 'activeAddresses', activeAddresses)
       // Ensure, it is in 'active' address list ( otherwise removing not needed )
       if (activeAddresses.includes(ipAddress)) {
         const remainingActiveAddresses = activeAddresses.filter((eachAddress) => {
           return eachAddress !== ipAddress
         })
-        logger.info(logID, 'stage:2', remainingActiveAddresses)
+        logger.info(logID, { activeAddresses, remainingActiveAddresses })
         if (remainingActiveAddresses?.length && remainingActiveAddresses?.length >= 1) {
           // Since we have 'remaining' active addresses, just-remove-failing-one, FAILOVER NOT NEEDED
           // multi=true case
-          logger.info(logID, 'stage:3')
           await webService.handleActiveAddressChange(remainingActiveAddresses)
         } else {
           // It is the only active address. FAILOVER NEEDED
           // Generally multi=false ( OR multi=true with only one active address )
           // In both the cases, we can try if failover target is available
-          logger.info(logID, 'stage:4')
           if (
             webService.serviceState.failover_progress === FAILOVER_PROGRESS.FAILOVER_FAILED &&
             !webService.isHealthy()
@@ -280,7 +275,6 @@ async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
             // So don't trigger another failover and leading to duplicate 'notification'
             // Let the other method 'checkCombinedPeerStateAndInitiateAddActiveIP', look for a healthy ip,
             // and trigger failover
-            logger.info(logID, 'stage:5')
             logger.info(
               logID,
               'FAILOVER_SKIPPED',
@@ -294,20 +288,19 @@ async function checkCombinedPeerStateAndInitiateRemoveActiveIP(
               "Let the other method 'checkCombinedPeerStateAndInitiateAddActiveIP', look for a healthy replacement ip, and trigger failover"
             )
           } else {
-            logger.info(logID, 'stage:6')
+            logger.info(logID, 'beginFailOverProcess')
             webService.beginFailOverProcess(ipAddress)
             const failOverIPAddress = findFailOverTargets(webService)?.[0]
             if (failOverIPAddress) {
               await failOverAndUpdateProgress(webService, ipAddress, failOverIPAddress)
-              logger.info(logID, 'stage:5')
             } else {
               webService.updateFailOverProgress(FAILOVER_PROGRESS.HEALTHY_TARGET_NOT_AVAILABLE)
-              logger.info(logID, 'stage:6')
+              logger.info(logID, 'beginFailOverProcess: HEALTHY_TARGET_NOT_AVAILABLE')
             }
           }
         }
       } else {
-        logger.info(logID, `Ignore. Not part of active addresses: ${activeAddresses}`)
+        logger.debug(logID, `Ignore. Not part of active addresses: ${activeAddresses}`)
       }
     }
   } catch (e: any) {
@@ -341,7 +334,7 @@ function verifyPassingAggreement(webService: WebServiceManager, ipAddress: strin
     logger.info(logID, true)
     return true
   } else {
-    logger.info(logID, false)
+    logger.debug(logID, false)
     return false
   }
 }
@@ -369,7 +362,7 @@ function verifyFailingAggreement(webService: WebServiceManager, ipAddress: strin
     logger.info(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, true)
     return true
   } else {
-    logger.info(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, false)
+    logger.debug(webService.logID, `verifyFailingAggreement: ${ipAddress}:`, false)
     return false
   }
 }
@@ -378,7 +371,7 @@ function verifyFailingAggreement(webService: WebServiceManager, ipAddress: strin
  * Qualify the available addresses and find the target for 'failover' usings 'checks' data
  */
 function findFailOverTargets(webService: WebServiceManager): string[] | undefined {
-  logger.info(webService.logID, 'findFailOverTarget', webService.serviceState.checks)
+  logger.debug(webService.logID, 'findFailOverTarget', webService.serviceState.checks)
   const qualifyingAddresses = webService.serviceConf.addresses.filter((eachIpAddress) => {
     // verify passing with peers using 'checks' data
     return verifyPassingAggreement(webService, eachIpAddress)

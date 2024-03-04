@@ -21,7 +21,7 @@ async function advanceBothRealAndFakeTime(millis: number) {
   }
 }
 
-async function advanceRealTime(millis: number) {
+async function passRealTimeInMillis(millis: number) {
   await new Promise((resolve) => (global as any).originalSetTimeout(resolve, millis))
 }
 
@@ -209,7 +209,7 @@ function isArraysEqual(arrayOne: any[], arrayTwo: any[]) {
 
 const commonTest = {
   advanceBothRealAndFakeTime,
-  advanceRealTime,
+  passRealTimeInMillis,
   timerFakeAbleAPIList,
   passTimeInMillis,
   usingFakeTimers,

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import appConfig from './../appConfig.js'
-import {MAX_ALLOWED_RETRIES, isNetworkError, logger} from './../coreUtils.js'
+import {MAX_ALLOWED_RETRIES, incrementCountAndWaitBeforeRetry, isNetworkError, logger} from './../coreUtils.js'
 import appState from './../appState.js'
 import {DnsManager} from './dnsManager.js'
 import {CustomError} from './../CustomError.js'
@@ -77,17 +77,13 @@ async function customFetch(
     if (isNetworkError(e)) {
       // wait and retry network errors
       if (retryOptions.currentRetryAttempt < MAX_ALLOWED_RETRIES) {
-        retryOptions.currentRetryAttempt += 1
-        const waitTime = 5000 + 1500 * retryOptions.currentRetryAttempt
-        logger.warn(`${logID}: currentRetryAttempt`, {
-          attempt: retryOptions.currentRetryAttempt,
+        await incrementCountAndWaitBeforeRetry(logID, retryOptions, {
+          url,
           reason: e?.cause?.code,
-          waitTime,
         })
-        await new Promise((resolve) => setTimeout(resolve, waitTime))
         return customFetch(url, fetchParams, retryOptions)
       }
-    }
+    }    
     throw e
   }
 }

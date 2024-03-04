@@ -67,7 +67,7 @@ app.get('/health', async (req, res) => {
         const delay = Math.floor(Math.random() * 1000) // maximum 1 sec as random will be between 0 and 1
         setTimeout(() => resolve(1), delay)
       })
-      console.log('Received health check:case:UP_STATE', { hostFromHeader })      
+      // console.log('Received health check:case:UP_STATE', { hostFromHeader })      
       res.writeHead(200, {'Content-Type': 'text/html', 'Transfer-Encoding': 'chunked'})
       res.flushHeaders()
       res.write(JSON.stringify({message: 'Is healthy'}))
@@ -75,7 +75,7 @@ app.get('/health', async (req, res) => {
       res.end()
       break;
     case IP_STATES.DELAYED_STATE:
-      console.log('Received health check:case:DELAYED_STATE', { hostFromHeader })
+      // console.log('Received health check:case:DELAYED_STATE', { hostFromHeader })
       await new Promise((resolve, _reject) => {
         setTimeout(() => resolve(1), 6100)
       })
@@ -89,13 +89,13 @@ app.get('/health', async (req, res) => {
       res.end()
       break;
     case IP_STATES.DOWN_STATE:
-      console.log('Received health check:case:DOWN_STATE', { hostFromHeader })  
+      // console.log('Received health check:case:DOWN_STATE', { hostFromHeader })  
       res.writeHead(503, {'Content-Type': 'text/html', 'Transfer-Encoding': 'chunked'})
       res.flushHeaders()
       res.end()
       break;
     default:
-      console.log('Received health check:case:UNKNOWN', { hostFromHeader })  
+      // console.log('Received health check:case:UNKNOWN', { hostFromHeader })  
       res.writeHead(404, {'Content-Type': 'text/html', 'Transfer-Encoding': 'chunked'})
       res.flushHeaders()
       res.end()

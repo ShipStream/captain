@@ -4,10 +4,11 @@
 
 import {type ServerOptions, type Socket as ServerSocket, Server as IOServer} from 'socket.io'
 import jwt from 'jsonwebtoken'
-import {MATE_EVENT_NAMES, MATE_SOCKET_SERVER_LOG_ID, closeGivenServer} from './captainSocketHelper.js'
+import {EVENT_NAMES, MATE_EVENT_NAMES, MATE_SOCKET_SERVER_LOG_ID, closeGivenServer} from './captainSocketHelper.js'
 import appConfig from '../appConfig.js'
-import {logger, processMateDisconnection} from '../coreUtils.js'
+import {logger} from '../coreUtils.js'
 import appState from '../appState.js'
+import { HEALTH_CHECK_REQUEST_VERIFY_STATE } from 'web-service/webServiceHelper.js'
 
 export class MateSocketServerManager {
   io!: IOServer
@@ -29,14 +30,14 @@ export class MateSocketServerManager {
       logger.info(logID, 'disconnecting', reason)
     });
     socket.onAnyOutgoing((event, args) => {
-      logger.info(`${logID}: outgoingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
+      logger.debug(`${logID}: outgoingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
     })
     socket.onAny((event, args) => {
-      logger.info(`${logID}: incomingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
+      logger.debug(`${logID}: incomingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
     })
   }
 
-  private async eachClientConnectionListeners(socket: ServerSocket) {
+  private async eachMateConnectionAndListeners(socket: ServerSocket) {
     const mateID = `${socket.handshake.query?.clientOrigin}`
     const logID = `${MATE_SOCKET_SERVER_LOG_ID}(Remote Client: ${mateID})`
     logger.info(`${logID}: New connection: registerListeners`, {
@@ -46,6 +47,27 @@ export class MateSocketServerManager {
     this.eachClientDebugListeners(logID, socket)
     socket.on(MATE_EVENT_NAMES.NEW_REMOTE_SERVICES, (payLoad) => {
       this.receiveNewRemoteServices(logID, payLoad)
+    })
+    socket.on(MATE_EVENT_NAMES.SERVICE_STATE_CHANGE, (payLoad) => {
+      logger.info(logID, MATE_EVENT_NAMES.SERVICE_STATE_CHANGE, payLoad)
+      // Extra information for reset request, whether to test 'passing' or 'failing'
+      const verifyState = payLoad.healthy ? HEALTH_CHECK_REQUEST_VERIFY_STATE.PASSING: HEALTH_CHECK_REQUEST_VERIFY_STATE.FAILING
+      const webServiceManager = appState.getWebService(payLoad.service)!
+      if (webServiceManager) {
+        // send health-check-request for all the ips of the remote service
+        for(const eachIPAddress of webServiceManager.serviceConf.addresses) {
+          logger.info(logID, MATE_EVENT_NAMES.SERVICE_STATE_CHANGE, {
+            eachIPAddress
+          })
+          // reset health check stats and try from zero again
+          webServiceManager.resetHealthCheckByIP(eachIPAddress)
+          appState
+            .getSocketManager()
+            .broadcastRequestForHealthCheck(webServiceManager, eachIPAddress, verifyState)
+        }
+      } else {
+        logger.warn(`${logID}: ${MATE_EVENT_NAMES.SERVICE_STATE_CHANGE}: Unknown Service: ${payLoad.service}`)
+      }
     })
     socket.on("disconnect", async (reason) => {
       logger.info(logID, 'disconnect', {
@@ -63,32 +85,43 @@ export class MateSocketServerManager {
    * @export
    */
   private setupConnectionAndListeners() {
+    // this.io.engine.use((req: any, res: any, next: any) => {
+    //   logger.info('req._query', req._query)
+    //   logger.info('req.url', req.url)
+    //   next()
+    // })
+  
     // JWT based authentication for socket connections between captain members
     this.io.use(function (socket, next) {
-      // const logID = `${SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address})`
-      const token = `${socket.handshake.query?.token}`
-      const clientOrigin = `${socket.handshake.query?.clientOrigin}`
-      if (!clientOrigin) {
-        // Important for debugging purpose. can be commented out if needed.
-        return next(new Error(`'clientOrigin' not set`))
-      }
-      if (token) {
-        jwt.verify(
-          token,
-          appConfig.MATE_SECRET_KEY,
-          function (err: jwt.VerifyErrors | null, _data: string | jwt.JwtPayload | undefined) {
-            if (err) {
-              return next(new Error(`Socket authentication failed: reason: ${err?.message}`))
+      try {
+        logger.info(`IO.USE ${MATE_SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address})`)
+        const token = `${socket.handshake.query?.token}`
+        const clientOrigin = `${socket.handshake.query?.clientOrigin}`
+        if (!clientOrigin) {
+          // Important for debugging purpose. can be commented out if needed.
+          return next(new Error(`'clientOrigin' not set`))
+        }
+        if (token) {
+          jwt.verify(
+            token,
+            appConfig.MATE_SECRET_KEY,
+            function (err: jwt.VerifyErrors | null, _data: string | jwt.JwtPayload | undefined) {
+              if (err) {
+                return next(new Error(`Socket authentication failed: reason: ${err?.message}`))
+              }
+              return next()
             }
-            return next()
-          }
-        )
-      } else {
-        return next(new Error(`Socket authentication 'token' not set`))
+          )
+        } else {
+          return next(new Error(`Socket authentication 'token' not set`))
+        }  
+      } catch(e) {
+        logger.error(`${MATE_SOCKET_SERVER_LOG_ID}(From ${socket.handshake.address}`, e)
+        throw e
       }
     })
     this.io.on('connection', async (socket) => {
-      this.eachClientConnectionListeners(socket)
+      this.eachMateConnectionAndListeners(socket)
     })
     // this.io.engine.on('initial_headers', (headers, _req) => {
     //   logger.info(`${SOCKET_SERVER_LOG_ID}: initial_headers:`, headers)
@@ -126,21 +159,22 @@ export class MateSocketServerManager {
   }
 
   async onDisconnect(mateID: string) {
-    const logID = `${MATE_SOCKET_SERVER_LOG_ID}:onDisconnect`
+    const messageID = appState.generateMessageID(EVENT_NAMES.MATE_DISCONNECTED)
+    const logID = `${MATE_SOCKET_SERVER_LOG_ID}:onDisconnect:${mateID}:${messageID}`
     try {
       logger.info(logID)
-      await processMateDisconnection(mateID)
-      if (appState.isLeader() || !appState.getLeaderUrl()) { 
+      const payLoad = {
+        message_id: messageID,
+        mate_id: mateID
+      }
+      await appState.processMateDisconnection(messageID, mateID)
+      if (appState.isLeader() || !appState.getLeaderUrl()) {
         // Case a). 'leader', re-broadcast to captain 'peers'
         // case b). 'no leader elected', re-broadcast to captain 'peers'
-        appState.getSocketManager().broadcastMateDisconnected({
-          mate_id: mateID
-        })
+        appState.getSocketManager().broadcastMateDisconnected(payLoad)
       } else {
         // Case 'non-leader', send it to captain 'leader'
-        appState.getSocketManager().sendMateDisconnected(appState.getLeaderUrl()!, {
-          mate_id: mateID
-        })
+        appState.getClientSocketManagerByRemoteUrl(appState.getLeaderUrl()!)!.sendMateDisconnected(payLoad)        
       }
     } catch (e) {
       logger.error(
@@ -162,13 +196,13 @@ export class MateSocketServerManager {
         appState.getSocketManager().broadcastNewRemoteServices(payLoad)
       } else {
         // Case 'non-leader', send it to captain 'leader'
-        appState.getSocketManager().sendNewRemoteServices(appState.getLeaderUrl()!, payLoad)
+        appState.getClientSocketManagerByRemoteUrl(appState.getLeaderUrl()!)!.sendNewRemoteServices(payLoad)
       }
       // Step2, because the service needs to be in other peers when this is leader and sends active addresses on registration.
       // So, broadcast first and register later
       appState.registerRemoteMateWebServices(payLoad.message_id, payLoad.mate_id, payLoad.services).catch((e) => {
         logger.error(
-          new Error(`${logID}: receiveNewRemoteServices: registerGivenMateWebServices: Details: ${payLoad}`, {
+          new Error(`${logID}: receiveNewRemoteServices: registerGivenMateWebServices: Details: ${JSON.stringify(payLoad)}`, {
             cause: e,
           })
         )  
