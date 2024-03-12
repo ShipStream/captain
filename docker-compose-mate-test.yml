@@ -1,0 +1,32 @@
+version: '3.7'
+services:
+  mate-test-main:
+    extends:
+      file: docker-compose-base.yml
+      service: mate-template
+    environment:
+      - NODE_ENV=test
+      - KEEP_ALIVE=120
+      - INTERVAL=5
+      - CAPTAIN_SECRET_KEY=ksjdhf2q34m23nlfWS69ri
+      - CAPTAIN_URL=ws://127.0.0.1:7401,ws://127.0.0.1:7402,ws://127.0.0.1:7403
+      - WEBSERVICE_YAML_LOCATION=./__tests__/data/mate-1-services.yaml
+      - MATE_ID=mate-1
+    volumes:
+      - /app/.pnpm-store
+      - /app/node_modules
+    networks:
+      custom-network:
+        ipv4_address: 10.7.0.11
+    command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm run jest-exec']
+
+networks:
+  custom-network:
+    name: ${COMPOSE_PROJECT_NAME}-mate-test-network
+    driver: bridge
+    # disable ipv6 to simplify network setup
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 10.7.0.0/16
+          gateway: 10.7.0.1

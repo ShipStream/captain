@@ -59,7 +59,7 @@ class Logger {
 }
 
 console.log('appConfig.NODE_ENV:', appConfig.NODE_ENV)
-export const logger = appConfig.NODE_ENV === 'test' ? console : new Logger()
+export const logger = new Logger()
 
 export function isHAMode() {
   if (appConfig.CONSUL_HTTP_ADDR) {

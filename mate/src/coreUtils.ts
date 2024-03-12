@@ -1,3 +1,4 @@
+import console from 'console'
 import fs from 'fs/promises'
 import http from 'http'
 import YAML from 'yaml'
@@ -60,7 +61,7 @@ class Logger {
 }
 
 console.log('appConfig.NODE_ENV:', appConfig.NODE_ENV)
-export const logger = appConfig.NODE_ENV === 'test' ? console : new Logger()
+export const logger = new Logger()
 
 
 /**
@@ -124,7 +125,7 @@ export async function initializeAppModules() {
  *
  */
 export async function softReloadApp() {
-  await appState.resetAppState({resetSockets: false, resetWebApps: true})
+  await appState.resetAppState({resetSockets: false, resetLockHandlers:false, resetWebApps: true})
   await initializeAppModules()
   appState.getSocketManager().sendNewRemoteServices()
 }

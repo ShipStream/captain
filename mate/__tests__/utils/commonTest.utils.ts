@@ -63,26 +63,30 @@ ${JSON.stringify(mesages, undefined, 2)}
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n`)
 }
 
-function getSpyDataForInstance(instanceObject: any, spiedPrototypFunction: jest.SpyInstance) {
+function getSpyDataForInstance(instanceObject: any, spiedMethodOrFunctionReference: jest.SpyInstance) {
   // shallow copy to avoid any potential mutations?
-  const classMockData = {...spiedPrototypFunction.mock}
+  const classMockData = {...spiedMethodOrFunctionReference.mock}
   const instanceMockData: Partial<jest.MockContext<any, any, any>> = {
     calls: [],
     results: [],
     instances: [],
     contexts: [],
   }
+  // console.log('getSpyDataForInstance', {
+  //   classMockData,
+  // })
   classMockData.contexts?.map((eachContent: any, eachContextIndex: number) => {
-    // // for debugging
-    // if (eachContent?.toString() === instanceObject?.toString() || eachContent === instanceObject) {
-    //   console.log('getSpyCallsForThisInstance:matching', {
-    //     instanceObject: instanceObject.toString(),
-    //     eachContent: eachContent.toString(),
-    //     calls: calls[eachContextIndex],
-    //     'equals': eachContent === instanceObject,
-    //     'toStringEquals': eachContent?.toString() === instanceObject?.toString()
-    //   })
-    // }
+    // for debugging
+    if (eachContent?.toString() === instanceObject?.toString() || eachContent === instanceObject) {
+      // console.log('getSpyCallsForThisInstance:matching', {
+      //   instanceObject: instanceObject,
+      //   eachContent: eachContent,
+      //   eachContextIndex,
+      //   calls: classMockData.calls?.[eachContextIndex],
+      //   'equals': eachContent === instanceObject,
+      //   'toStringEquals': eachContent?.toString() === instanceObject?.toString()
+      // })
+    }
     if (eachContent === instanceObject) {
       instanceMockData.calls?.push(classMockData.calls[eachContextIndex])
       instanceMockData.results?.push(classMockData.results[eachContextIndex]!)
@@ -90,6 +94,9 @@ function getSpyDataForInstance(instanceObject: any, spiedPrototypFunction: jest.
       instanceMockData.contexts?.push(classMockData.contexts[eachContextIndex])
     }
   })
+  // console.log('getSpyDataForInstance', { 
+  //   instanceMockData
+  // })
   return instanceMockData
 }
 
@@ -172,10 +179,10 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
           // })
           return eachArgMatchResult
         })
-        // commonTest.attentionLog(`${logID}:changeCount`, {
-        //   argsList: argsList.map((eachValue) => String(eachValue)),
-        //   result,
-        // })
+        commonTest.attentionLog(`${logID}:changeCount`, {
+          argsList: argsList.map((eachValue) => String(eachValue)),
+          result,
+        })
       }
       return result
     })

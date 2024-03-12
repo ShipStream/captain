@@ -51,7 +51,7 @@ services:
     # command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm exec -- jest --forceExit --detectOpenHandles --coverage']
 networks:
   custom-network:
-    name: ${COMPOSE_PROJECT_NAME}-custom-network
+    name: ${COMPOSE_PROJECT_NAME}-captain-test-network
     driver: bridge
     # disable ipv6 to simplify network setup
     enable_ipv6: false

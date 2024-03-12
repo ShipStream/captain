@@ -190,7 +190,11 @@ async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServi
         // b). webService is 'unhealthy'. This happens when previous failover failed.
         // But now we have chance to do successful failover as we have a healthy ipaddress
         // Initiate the whole failover process
-        logger.info(logID, 'WEB_SERVICE_STATUS.UN_HEALTHY')
+        logger.info(
+          logID,
+          'previousState: WEB_SERVICE_STATUS.UN_HEALTHY',
+          'newState: We got new healthy ip now, doing failover'
+        )
         webService.beginFailOverProcess(webService.serviceState.active[0]!)
         await failOverAndUpdateProgress(webService, webService.serviceState.active?.[0], ipAddress)
       } else {
@@ -198,7 +202,7 @@ async function checkCombinedPeerStateAndInitiateAddActiveIP(webService: WebServi
         if (!activeAddresses.includes(ipAddress)) {
           if (webService.serviceConf.multi) {
             // c). multi=true ( ROUND ROBIN ). Any 'passing' ip can be added into the system in this case
-            logger.info(logID, 'multi')
+            logger.info(logID, 'multi', 'We got new healthy ip, adding it to existing ips (multi)')
             const newActiveAddresses = []
             newActiveAddresses.push(...webService.serviceState.active)
             newActiveAddresses.push(ipAddress)

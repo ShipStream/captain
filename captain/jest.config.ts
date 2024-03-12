@@ -1,6 +1,7 @@
 import type {JestConfigWithTsJest} from 'ts-jest'
 
 const config: JestConfigWithTsJest = {
+  displayName: 'Captain Tests',
   // Automatically clear mock calls, instances, contexts and results before every test
   clearMocks: true,
 
@@ -21,7 +22,7 @@ const config: JestConfigWithTsJest = {
   verbose: true,
   transform: {
     '^.+\\.[jt]sx?$': ['ts-jest', {
-      tsconfig: '__tests__/tsconfig.json'
+      tsconfig: '<rootDir>/__tests__/tsconfig.json'
     }],
   },
   moduleNameMapper: {

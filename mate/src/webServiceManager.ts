@@ -99,7 +99,7 @@ export class WebServiceManager {
     return this.serviceConf.name
   }
 
-  get getPollingInterval(): number {
+  get pollingInterval(): number {
     logger.info('appConfig.INTERVAL', appConfig.INTERVAL)
     return appConfig.INTERVAL
   }
@@ -138,10 +138,12 @@ export class WebServiceManager {
    * @memberof WebServiceManager
    */
   public setStateForGivenIP(ipAddress: string, currentIPState: PASS_FAIL_IP_STATES) {
+    // logger.info('setStateForGivenIP:pre', this.serviceState.checks)
     this.serviceState.checks[ipAddress] = {
       state: currentIPState,
       last_update: new Date()
     }
+    logger.debug('setStateForGivenIP', this.serviceState.checks[ipAddress])
   }
 
   /* 
@@ -149,8 +151,6 @@ export class WebServiceManager {
   */
 
   private constructor(serviceConf: typeWebServiceConf) {
-    this.pollSuccessRoundRobin = this.pollSuccessRoundRobin.bind(this)
-    this.pollFailedRoundRobin = this.pollFailedRoundRobin.bind(this)
 
     const currentDateTime = new Date()
     this.serviceConf = serviceConf
@@ -185,7 +185,12 @@ export class WebServiceManager {
     Start of 'Member funtions'
   */
 
-    
+  public getAddressesCountForBulkPolling() {
+    // 5 or half of all addresses, whichever is lower
+    const noOfAddressesToBeScanned = Math.max(1, Math.min(3, Math.floor(this.serviceConf.mate.addresses.length / 2) + 1))
+    return noOfAddressesToBeScanned    
+  }
+
   /**
    * Get UP/DOWN state of adjacent ips in the list of mate ipaddresses,
    * for extra UP/DOWN confirmation of the service
@@ -195,7 +200,7 @@ export class WebServiceManager {
    */
   public async pollAndGetStateOfAdjacentIps(pollLogID: string, ipAddress: string) {
     // 5 or half of all addresses, whichever is lower
-    const noOfAddressesToBeScanned = Math.max(1, Math.min(3, Math.floor(this.serviceConf.mate.addresses.length / 2) + 1))
+    const noOfAddressesToBeScanned = this.getAddressesCountForBulkPolling()
     const nextSetOfAddresses = this.getAddressesToBePolled(pollLogID, noOfAddressesToBeScanned, false).filter(
       (eachIp) => eachIp !== ipAddress
     )
@@ -560,7 +565,13 @@ export class WebServiceManager {
       const ipAddresses = this.getAddressesToBePolled(pollLogID, 1)! // one at a time in 'INTERVAL' normally
       await Promise.all(
         ipAddresses.map((eachIPAddress: string) =>
-          this.pollEachAddress(pollLogID, eachIPAddress, this.pollSuccessRoundRobin, this.pollFailedRoundRobin).catch((e) => {
+          this.pollEachAddress(
+            pollLogID,
+            eachIPAddress,
+            // using closure for pollSuccessRoundRobin and pollFailedRoundRobin to preserve 'this'
+            (pollLogID: string, ipAddress: string) => this.pollSuccessRoundRobin(pollLogID, ipAddress),
+            (pollLogID: string, ipAddress: string) => this.pollFailedRoundRobin(pollLogID, ipAddress)
+          ).catch((e) => {
             logger.error(new Error(`${this.pollLogID}:POLLING:EACH:ip:${eachIPAddress}`, {cause: e}))
           })
         )
@@ -598,7 +609,7 @@ export class WebServiceManager {
    * Sync addresses and initiate polling for failover
    */
   async initialize() {
-    this.initiatePolling(this.getPollingInterval * 1000)
+    this.initiatePolling(this.pollingInterval * 1000)
   }
 
   /**

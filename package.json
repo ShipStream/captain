@@ -10,7 +10,8 @@
     "docker:dev:stop": "docker compose -f docker-compose.yml -p dns-orchestrator-dev stop",
     "docker:dev:kill": "docker compose -f docker-compose.yml -p dns-orchestrator-dev kill --remove-orphans",
     "docker:dev:rm": "docker compose -f docker-compose.yml -p dns-orchestrator-dev rm -f -s -v",
-    "docker:test": "docker compose -f docker-compose-test.yml -p dns-orchestrator-test up --build --remove-orphans --abort-on-container-exit --exit-code-from captain-test-main"
+    "docker:captain-test": "docker compose -f docker-compose-captain-test.yml -p dns-orchestrator-captain-test up --build --remove-orphans --abort-on-container-exit --exit-code-from captain-test-main",
+    "docker:mate-test": "docker compose -f docker-compose-mate-test.yml -p dns-orchestrator-captain-test up --build --remove-orphans --abort-on-container-exit --exit-code-from mate-test-main"
   },
   "engines": {
     "node": ">=20.0.0"

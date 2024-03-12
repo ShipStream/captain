@@ -69,7 +69,7 @@ class AppState {
     this.raceHandler = new CustomRaceConditionLock()
   }
 
-  async resetAppState({resetSockets, resetWebApps}: {resetSockets: boolean; resetWebApps: boolean}) {
+  async resetAppState({resetSockets, resetLockHandlers, resetWebApps}: {resetSockets: boolean; resetLockHandlers: boolean; resetWebApps: boolean}) {
     if (resetSockets) {
       appState.getSocketManager().cleanUpForDeletion()
     }
@@ -80,6 +80,9 @@ class AppState {
         // logger.info('softReloadApp:eachServiceKey', eachServiceKey)
         this.deleteWebService(eachServiceKey)
       }
+    }
+    if (resetLockHandlers) {
+      this.getRaceHandler().cleanUpForDeletion()
     }
   }
 

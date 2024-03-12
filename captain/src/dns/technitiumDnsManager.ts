@@ -6,6 +6,9 @@ import {DnsManager} from './dnsManager.js'
 export const ERROR_DNS_ZONE_NOT_INITIALIZED_PREFIX = `No such authoritative zone was found:`
 export const ERROR_DNS_ZONE_ALREADY_EXISTS = `Zone already exists:`
 
+const USER_NAME = 'admin'
+const PASSWORD = 'admin'
+
 /**
  * Common handler for typical response from technitium
  */
@@ -61,7 +64,7 @@ async function getSessionToken() {
   if (sessionToken) {
     return sessionToken
   } else {
-    const response = await fetchData('/api/user/login?user=admin&pass=admin&includeInfo=true', undefined, false)
+    const response = await fetchData(`/api/user/login?user=${USER_NAME}&pass=${PASSWORD}&includeInfo=true`, undefined, false)
     // logger.info('getSessionToken', {
     //   response,
     // })
