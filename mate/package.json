@@ -1,7 +1,8 @@
 {
-  "name": "captain-app",
+  "name": "mate-app",
   "version": "1.0.0",
   "description": "This Node.js app ('Mate') acts as a support app for public DNS failover orchestrator (captain). It monitors health of local services and updates DNS records according to the health of each upstream address and sends the data to central 'captain' for processing. This allows operating efficiently with a large number of services on the private network behind a load balancer",
+  "license": "Apache-2.0",
   "main": "index.js",
   "private": true,
   "type": "module",

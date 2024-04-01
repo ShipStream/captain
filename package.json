@@ -15,7 +15,7 @@
     "docker:mate-test": "docker compose -f docker-compose-mate-test.yml -p dns-orchestrator-captain-test up --build --remove-orphans --abort-on-container-exit --exit-code-from mate-test-main"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=18.0.0"
   },
   "dependencies": {},
   "devDependencies": {}
