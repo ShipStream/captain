@@ -1,7 +1,8 @@
 {
-  "name": "captain-mono-repo",
+  "name": "shipstream-captain",
   "version": "1.0.0",
   "description": "This Node.js app ('Captain') acts as a public DNS failover orchestrator. It monitors health of services and updates DNS records according to the health of each upstream address. It can run stand-alone or be accompanied by any number of 'Mates' which are used to report remote services and perform remote health checks on those services.",
+  "license": "Apache-2.0",
   "private": true,
   "type": "module",
   "scripts": {
