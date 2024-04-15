@@ -7,38 +7,38 @@ services:
     # env_file:
     #   - .env
     environment:
-      - NODE_ENV=${NODE_ENV}
-      - DNS_PROVIDER=${DNS_PROVIDER}
-      - DEFAULT_HEALTHY_INTERVAL=${DEFAULT_HEALTHY_INTERVAL}
-      - DEFAULT_UNHEALTHY_INTERVAL=${DEFAULT_UNHEALTHY_INTERVAL}
-      - DEFAULT_FALL=${DEFAULT_FALL}
-      - DEFAULT_RISE=${DEFAULT_RISE}
-      - DEFAULT_CONNECT_TIMEOUT=${DEFAULT_CONNECT_TIMEOUT}
-      - DEFAULT_READ_TIMEOUT=${DEFAULT_READ_TIMEOUT}
-      - DEFAULT_COOL_DOWN=${DEFAULT_COOL_DOWN}
-      - MEMBER_URLS=${MEMBER_URLS}
-      - CAPTAIN_PORT=${CAPTAIN_PORT}
-      - CAPTAIN_SECRET_KEY=${CAPTAIN_SECRET_KEY}
-      - MATE_PORT=${MATE_PORT}
-      - MATE_SECRET_KEY=${MATE_SECRET_KEY}
-      - CONSUL_HTTP_TOKEN=${CONSUL_HTTP_TOKEN}
-      - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN}
-      - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
-      - TECHNITIUM_BASE_URL=${TECHNITIUM_BASE_URL}
-      - TECHNITIUM_CUSTOM_ZONE_NAME=${TECHNITIUM_CUSTOM_ZONE_NAME}
-      - SLACK_TOKEN=${SLACK_TOKEN}
-      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
-      - DATADOG_API_KEY=${DATADOG_API_KEY}
-      - DATADOG_SITE=${DATADOG_SITE}
-      - NOTIFICATION_URL=${NOTIFICATION_URL}
-      - NOTIFICATION_HEADER=${NOTIFICATION_HEADER}
+      - NODE_ENV=${NODE_ENV:-development}
+      - DNS_PROVIDER=${DNS_PROVIDER:-technitium}
+      - DEFAULT_HEALTHY_INTERVAL=${DEFAULT_HEALTHY_INTERVAL-}
+      - DEFAULT_UNHEALTHY_INTERVAL=${DEFAULT_UNHEALTHY_INTERVAL-}
+      - DEFAULT_FALL=${DEFAULT_FALL-}
+      - DEFAULT_RISE=${DEFAULT_RISE-}
+      - DEFAULT_CONNECT_TIMEOUT=${DEFAULT_CONNECT_TIMEOUT-}
+      - DEFAULT_READ_TIMEOUT=${DEFAULT_READ_TIMEOUT-}
+      - DEFAULT_COOL_DOWN=${DEFAULT_COOL_DOWN-}
+      - MEMBER_URLS=ws://10.5.0.11:7400,ws://10.5.0.12:7400,ws://10.5.0.13:7400
+      - CAPTAIN_PORT=${CAPTAIN_PORT-}
+      - CAPTAIN_SECRET_KEY=${CAPTAIN_SECRET_KEY-}
+      - MATE_PORT=${MATE_PORT-}
+      - MATE_SECRET_KEY=${MATE_SECRET_KEY-}
+      - CONSUL_HTTP_TOKEN=${CONSUL_HTTP_TOKEN-}
+      - CLOUDFLARE_TOKEN=${CLOUDFLARE_TOKEN-}
+      - CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID-}
+      - TECHNITIUM_BASE_URL=${TECHNITIUM_BASE_URL:-http://10.5.0.2:5380}
+      - TECHNITIUM_CUSTOM_ZONE_NAME=${TECHNITIUM_CUSTOM_ZONE_NAME:-ops}
+      - SLACK_TOKEN=${SLACK_TOKEN-}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID-}
+      - DATADOG_API_KEY=${DATADOG_API_KEY-}
+      - DATADOG_SITE=${DATADOG_SITE-}
+      - NOTIFICATION_URL=${NOTIFICATION_URL-}
+      - NOTIFICATION_HEADER=${NOTIFICATION_HEADER-}
     volumes:
       - ./captain:/app
       - ./__simulation__/data:/data
       - /app/dist
-      - ./__simulation__/real-consul-app/certs/:/consul/config/certs/:ro
+      - ./captain/__simulation__/real-consul-app/certs/:/consul/config/certs/:ro
     entrypoint: ['sh', '-c']
-    # command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
+    # # installation done commonly by 'captain-apps-install-packages' so 'pnpm i' not needed
     # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
     command:
       - |
@@ -50,10 +50,10 @@ services:
       context: mate
       target: develop-stage
     environment:
-      - NODE_ENV=${NODE_ENV}
-      - KEEP_ALIVE=${__MATE__KEEP_ALIVE}
-      - INTERVAL=${__MATE__INTERVAL}
-      - CAPTAIN_SECRET_KEY=${__MATE__CAPTAIN_SECRET_KEY}
+      - NODE_ENV=${NODE_ENV:-development}
+      - KEEP_ALIVE=${KEEP_ALIVE-}
+      - INTERVAL=${INTERVAL-}
+      - MATE_SECRET_KEY=${MATE_SECRET_KEY-}
     volumes:
       - ./mate:/app
       - ./__simulation__/data:/data
@@ -69,12 +69,12 @@ services:
       - ./__simulation__/dummy-apps:/app
       - /app/dist
     environment:
-      - NODE_ENV=${NODE_ENV}
+      - NODE_ENV=${NODE_ENV:-development}
     entrypoint: ['sh', '-c']
     cap_add:
       - NET_ADMIN
     # command: ['pnpm i --config.confirmModulesPurge=false && exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
-    command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']  
+    command: ['exec nodemon --signal SIGTERM -- --inspect=0.0.0.0:9234']
 
   # https://github.com/TechnitiumSoftware/DnsServer/blob/master/docker-compose.yml
   dns-server-template:
@@ -86,10 +86,8 @@ services:
       - '53:53/tcp' #DNS service
     environment:
       - DNS_SERVER_DOMAIN=dns-server #The primary domain name used by this DNS Server to identify itself.
-      - DNS_SERVER_ADMIN_PASSWORD=admin #DNS web console admin user password.
+      - DNS_SERVER_ADMIN_PASSWORD=abcdef #DNS web console admin user password.
       - DNS_SERVER_FORWARDERS=8.8.8.8, 8.8.4.4 #Comma separated list of forwarder addresses.
-    # volumes:
-    #   - config:/etc/dns
     restart: unless-stopped
     sysctls:
       - net.ipv4.ip_local_port_range=1024 65000

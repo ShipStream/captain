@@ -28,7 +28,7 @@ export class ConsulService {
       }
     } catch (e: any) {
       if (`${e?.cause?.code}` === 'ECONNREFUSED' || `${e?.cause?.code}` === 'ENOTFOUND') {
-        logger.error('Consul Service: customFetch', e?.cause?.code, url)
+        // logger.error('Consul Service: customFetch', e?.cause?.code, url)
         return {
           status: CONSUL_QUERY_STATUS.SERVICE_UNAVAILABLE,
           error: e,

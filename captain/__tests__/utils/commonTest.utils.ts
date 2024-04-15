@@ -180,7 +180,7 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
       return result
     })
     const matchingInvocationCount = matchingCalls?.length || 0
-    console.log(`${logID}:waitUntilCalled`, {matchingCalls, matchingInvocationCount})
+    // console.info(`${logID}:waitUntilCalled`, {matchingCalls, matchingInvocationCount})
     if (matchingInvocationCount >= times) {
       console.log(`${logID}:waitUntilCalled`, {
         'instanceSpyData.calls?.length': instanceSpyData.calls?.length,

@@ -24,12 +24,18 @@ services:
       - DNS_PROVIDER=technitium
       - TECHNITIUM_BASE_URL=http://10.6.0.2:5380
       - TECHNITIUM_CUSTOM_ZONE_NAME=ops
+      - SLACK_TOKEN=dummy-slack-token
+      - SLACK_CHANNEL_ID=dummy-slack-channel-id
+      - DATADOG_SITE=http://dummy-datadog-site
+      - DATADOG_API_KEY=dummy-datadog-api-key
+      - NOTIFICATION_URL=http://dummy-generic-notification-url
+      - NOTIFICATION_HEADER={"notify_token":"dummy-sample-token-value"}
       - WEBSERVICE_YAML_LOCATION=./__tests__/data/captain-one-services.yaml
       - MATE_PORT=7450
+      # common to both captain and mate
       - MATE_SECRET_KEY=ksjdhf2q34m23nlfWS69ri
-      # mock mate properties
-      - __MATE_COMMON__CAPTAIN_URL=ws://127.0.0.1:7450
-      - __MATE_COMMON__CAPTAIN_SECRET_KEY=ksjdhf2q34m23nlfWS69ri
+      # mate properties
+      - CAPTAIN_URL=ws://127.0.0.1:7450
       - __MATE_TEST_1__WEBSERVICE_YAML_LOCATION=./__tests__/data/mate-1-services.yaml
       - __MATE_TEST_2__WEBSERVICE_YAML_LOCATION=./__tests__/data/mate-2-services.yaml
 
@@ -46,9 +52,9 @@ services:
     # dns:
     #   - 10.6.0.2
     #   - 8.8.4.4
-    command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm run jest-exec']
-    # command: ['ls -l && pnpm i --config.confirmModulesPurge=false && sleep infinity']
-    # command: ['ls -l && pnpm i --config.confirmModulesPurge=false && exec pnpm exec -- jest --forceExit --detectOpenHandles --coverage']
+    command: ['pnpm i --config.confirmModulesPurge=false && exec pnpm run jest-exec']
+    # command: ['pnpm i --config.confirmModulesPurge=false && sleep infinity']
+    # command: ['pnpm i --config.confirmModulesPurge=false && exec pnpm exec -- jest --forceExit --detectOpenHandles --coverage']
 networks:
   custom-network:
     name: ${COMPOSE_PROJECT_NAME}-captain-test-network

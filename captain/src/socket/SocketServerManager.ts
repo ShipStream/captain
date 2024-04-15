@@ -2,9 +2,9 @@
  * Socket server that handles communication from other captains
  */
 
-import {type ServerOptions, type Socket as ServerSocket, Server as IOServer, RemoteSocket} from 'socket.io'
+import {type ServerOptions, type Socket as ServerSocket, Server as IOServer} from 'socket.io'
 import jwt from 'jsonwebtoken'
-import { EVENT_NAMES, SOCKET_SERVER_LOG_ID, acknowledge, closeGivenServer, receiveMateDisconnected, receiveNewRemoteServices} from './captainSocketHelper.js'
+import { EVENT_NAMES, SOCKET_SERVER_LOG_ID, closeGivenServer, receiveMateDisconnected, receiveNewRemoteServices, registerServerDebugListeners, retrieveClientOrigin} from './captainSocketHelper.js'
 import {WebServiceManager} from '../web-service/webServiceManager.js'
 import appConfig from '../appConfig.js'
 import appState from '../appState.js'
@@ -13,10 +13,6 @@ import { HEALTH_CHECK_REQUEST_VERIFY_STATE, typeWebServiceConf } from './../web-
 
 function retrieveToken(socket: ServerSocket) {
   return `${socket.handshake.query?.token}`
-}
-
-function retrieveClientOrigin(socket: ServerSocket | RemoteSocket<any, any>) {
-  return `${socket.handshake.query?.clientOrigin}`
 }
 
 /**
@@ -214,13 +210,6 @@ export class CaptainSocketServerManager {
   } = {}
 
 
-  private async getSocketDetails() {
-    return (await this.io.fetchSockets()).map((eachSocket) => [
-      eachSocket.id,
-      retrieveClientOrigin(eachSocket),
-    ])
-  }
-
   /**
    * Listeners for direct communication from a client ( instead of broadcast which is always from 'server' to 'client' )
    * Direct/specific communication using a 'remote-captain-url' is done from 'client' to 'server',
@@ -242,38 +231,6 @@ export class CaptainSocketServerManager {
         payLoad
       })
       receiveMateDisconnected(logID, payLoad, ackCallback)
-    })
-  }
-
-  /**
-   * Some basic listeners to log debugging messages about communication from this server
-   *
-   * @param {ServerSocket} socket
-   */
-  private async registerDebugListeners(socket: ServerSocket) {
-    const clientOrigin = retrieveClientOrigin(socket)
-    const logID = `${SOCKET_SERVER_LOG_ID}(Remote Client: ${clientOrigin})`
-    logger.info(`${logID}: New connection: registerListeners`, {
-      new: [socket.id, clientOrigin],
-      all: (await this.io.fetchSockets()).map((eachSocket) => [
-        eachSocket.id,
-        retrieveClientOrigin(eachSocket),
-      ]),
-    })
-    socket.on("disconnect", async (reason) => {
-      logger.info(logID, 'disconnect', {
-        reasonForDisconnection: reason,
-        remainingOpenConnections: await this.getSocketDetails(),        
-      })
-    });
-    socket.on("disconnecting", (reason) => {
-      logger.info(logID, 'disconnecting', reason)
-    });
-    socket.onAnyOutgoing((event, args) => {
-      logger.debug(`${logID}: outgoingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
-    })
-    socket.onAny((event, args) => {
-      logger.debug(`${logID}: incomingMessage(${socket.handshake.address})`, event, JSON.stringify(args))
     })
   }
 
@@ -324,7 +281,7 @@ export class CaptainSocketServerManager {
       }
     })
     this.io.on('connection', async (socket) => {
-      this.registerDebugListeners(socket)
+      registerServerDebugListeners(appConfig.SELF_URL, this.io, socket)
       this.registerListeners(socket)
       await transferCurrentState(socket)
     })

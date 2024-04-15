@@ -3,6 +3,18 @@ import {logger, customFetch} from './coreUtils.js'
 import {WebServiceManager} from './web-service/webServiceManager.js'
 
 export class NotificationService {
+  static isSlackConfigured() {
+    return !!(appConfig.SLACK_TOKEN && appConfig.SLACK_CHANNEL_ID)
+  }
+  
+  static isDatadogConfigured() {
+    return !!(appConfig.DATADOG_SITE && appConfig.DATADOG_API_KEY)
+  }
+  
+  static isGenericNotificationConfigured() {
+    return !!(appConfig.NOTIFICATION_URL)
+  }  
+
   static getSlackMessageUrl() {
     if (appConfig.SLACK_BASE_URL) {
       return `${appConfig.SLACK_BASE_URL}/chat.postMessage`
@@ -16,7 +28,9 @@ export class NotificationService {
   }
   
   static getGenericNotificationUrl() {
-    return process.env.NOTIFICATION_URL
+    if (appConfig.NOTIFICATION_URL) {
+      return appConfig.NOTIFICATION_URL
+    }
   }  
 
   constructDatadogEvent(input: {
@@ -55,25 +69,33 @@ export class NotificationService {
     removed?: string[]
     errorMessage?: string
   }) {
-    const logID = 'Datadog Service'
-    const fullUrl = NotificationService.getDatadogEventUrl()!
-    const jsonResponse = await customFetch(logID, fullUrl, {
-      method: 'POST',
-      body: JSON.stringify(this.constructDatadogEvent(input)),
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'DD-API-KEY': appConfig.DATADOG_API_KEY,
-      },
-    })
-    if (jsonResponse.status !== 'ok') {
-      throw new Error(
-        `Datadog Service: ${jsonResponse.errors || 'Unknown Error'}: Details: ${JSON.stringify({
-          ...jsonResponse,
-          fullUrl,
-        })}`
-      )
+    if (!NotificationService.isDatadogConfigured()) {
+      logger.warn('Not sending "Datadog Notification" as related "env" variables not configured.', { serviceName: input.serviceName, serviceZoneRecord: input.zoneRecord })
+      return
     }
-    logger.debug('datadog:postEvent', jsonResponse)
+    const logID = `Datadog Service:serviceName=${input.serviceName}:zoneRecord=${input.zoneRecord}`
+    try {
+      const fullUrl = NotificationService.getDatadogEventUrl()!
+      const jsonResponse = await customFetch(logID, fullUrl, {
+        method: 'POST',
+        body: JSON.stringify(this.constructDatadogEvent(input)),
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8',
+          'DD-API-KEY': appConfig.DATADOG_API_KEY,
+        },
+      })
+      if (jsonResponse.status !== 'ok') {
+        throw new Error(
+          `Datadog Service: ${jsonResponse.errors || 'Unknown Error'}: Details: ${JSON.stringify({
+            ...jsonResponse,
+            fullUrl,
+          })}`
+        )
+      }
+      logger.debug('datadog:postEvent', jsonResponse)
+    } catch(e) {
+      logger.info('Error: Datadog notification', { serviceName: input.serviceName, serviceZoneRecord: input.zoneRecord, e })
+    }
   }
 
   constructSlackMessage(input: {
@@ -101,26 +123,34 @@ export class NotificationService {
     removed?: string[]
     errorMessage?: string
   }) {
-    const logID = 'Slack Service'
-    const fullUrl = NotificationService.getSlackMessageUrl()!
-    const jsonResponse = await customFetch(logID, fullUrl, {
-      headers: {
-        Authorization: `Bearer ${appConfig.SLACK_TOKEN}`,
-        'Content-Type': 'application/json;charset=UTF-8',
-      },
-      method: 'POST',
-      body: JSON.stringify({
-        channel: appConfig.SLACK_CHANNEL_ID,
-        text: this.constructSlackMessage(input),
-      }),
-    })
-    if (!jsonResponse.ok) {
-      // another 'ok' in normal response
-      throw new Error(
-        `${logID}: ${jsonResponse.error || 'Unknown Error'}: Details: ${JSON.stringify({...jsonResponse, fullUrl})}`
-      )
+    try {
+      if (!NotificationService.isSlackConfigured()) {
+        logger.warn('Not sending "Slack Notification" as related "env" variables not configured.', { serviceZoneRecord: input.zoneRecord })
+        return
+      }
+      const logID = 'Slack Service'
+      const fullUrl = NotificationService.getSlackMessageUrl()!
+      const jsonResponse = await customFetch(logID, fullUrl, {
+        headers: {
+          Authorization: `Bearer ${appConfig.SLACK_TOKEN}`,
+          'Content-Type': 'application/json;charset=UTF-8',
+        },
+        method: 'POST',
+        body: JSON.stringify({
+          channel: appConfig.SLACK_CHANNEL_ID,
+          text: this.constructSlackMessage(input),
+        }),
+      })
+      if (!jsonResponse.ok) {
+        // another 'ok' in normal response
+        throw new Error(
+          `${logID}: ${jsonResponse.error || 'Unknown Error'}: Details: ${JSON.stringify({...jsonResponse, fullUrl})}`
+        )
+      }
+      logger.debug('slackService:postMessage', jsonResponse)
+    } catch(e) {
+      logger.info('Error: Slack notification', { serviceZoneRecord: input.zoneRecord, e })
     }
-    logger.debug('slackService:postMessage', jsonResponse)
   }
 
   async postGenericHttpNotification(data: {
@@ -133,16 +163,24 @@ export class NotificationService {
     removed?: string[]
     error_message?: string
   }) {
-    const logID = 'customNotificationFetch'
-    const response = await customFetch(logID, NotificationService.getGenericNotificationUrl()!, {
-      headers: {
-        'Content-Type': 'application/json;charset=UTF-8',
-        ...JSON.parse(appConfig.NOTIFICATION_HEADER),
-      },
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-    logger.debug('customNotificationFetch', response)
+    try {
+      if (!NotificationService.isGenericNotificationConfigured()) {
+        logger.warn('Not sending "Generic Post Notification" as related "env" variables not configured.', { serviceName : data.name, serviceZoneRecord: data.zone_record })
+        return
+      }
+      const logID = 'Generic Post Notification'
+      const response = await customFetch(logID, NotificationService.getGenericNotificationUrl()!, {
+        headers: {
+          'Content-Type': 'application/json;charset=UTF-8',
+          ...appConfig.NOTIFICATION_HEADER ? JSON.parse(appConfig.NOTIFICATION_HEADER) : {},
+        },
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+      logger.debug('customNotificationFetch', response)
+    } catch(e) {
+      logger.info('Error: Generic HTTP notification', { serviceName : data.name, serviceZoneRecord: data.zone_record, e })
+    }
   }
 
   constructor() {}

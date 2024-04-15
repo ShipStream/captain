@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken'
-import {Server as IOServer} from 'socket.io'
+import {Server as IOServer, type Socket as ServerSocket, type RemoteSocket} from 'socket.io'
 import type {Socket as ClientSocket} from 'socket.io-client'
 import appState from '../appState.js'
 import appConfig from './../appConfig.js'
@@ -84,6 +84,50 @@ export async function registerClientDebugListeners(clientSocket: ClientSocket, s
     logger.debug(`${logID}: incomingMessage`, event, JSON.stringify(args))
   })
 }
+
+/**
+ * Some basic listeners to log debugging messages about communication from this server
+ *
+ * @param {ServerSocket} serverSocket
+ */
+export async function registerServerDebugListeners(hostUrl: string, io: IOServer, serverSocket: ServerSocket) {
+  const clientOrigin = retrieveClientOrigin(serverSocket)
+  const logID = `${SOCKET_SERVER_LOG_ID}(Host: ${hostUrl} RemoteClient: ${clientOrigin})`
+  logger.info(`${logID}: New connection: registerListeners`, {
+    new: [serverSocket.id, clientOrigin],
+    all: (await io.fetchSockets()).map((eachSocket) => [
+      eachSocket.id,
+      retrieveClientOrigin(eachSocket),
+    ]),
+  })
+  serverSocket.on("disconnect", async (reason) => {
+    logger.info(logID, 'disconnect', {
+      reasonForDisconnection: reason,
+      remainingOpenConnections: await getSocketDetails(io),
+    })
+  });
+  serverSocket.on("disconnecting", (reason) => {
+    logger.info(logID, 'disconnecting', reason)
+  });
+  serverSocket.onAnyOutgoing((event, args) => {
+    logger.debug(`${logID}: outgoingMessage(${serverSocket.handshake.address})`, event, JSON.stringify(args))
+  })
+  serverSocket.onAny((event, args) => {
+    logger.debug(`${logID}: incomingMessage(${serverSocket.handshake.address})`, event, JSON.stringify(args))
+  })
+}
+
+export function retrieveClientOrigin(socket: ServerSocket | RemoteSocket<any, any>) {
+  return `${socket.handshake.query?.clientOrigin}`
+}
+
+export async function getSocketDetails(io: IOServer) {
+  return (await io.fetchSockets()).map((eachSocket) => [
+    eachSocket.id,
+    retrieveClientOrigin(eachSocket),
+  ])
+}
+
 
 export function acknowledge(ackCallback: Function | undefined, status: boolean, acknowledgedBy: string) {
   if (ackCallback) {

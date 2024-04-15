@@ -143,7 +143,7 @@ describe('Tests. Primary/Common', () => {
     // Test all remote-peer clients for having received 'new-leader' notification
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
       const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
-      await higherOrderUtil.verifyRemoteCaptainReceivedNewLeader(mockClientSocketManager)
+      await higherOrderUtil.verifyRemoteCaptainClientReceivedNewLeader(mockClientSocketManager)
     }
   })
   test('Captain peers are kept in sync. Service checks "state" broadcast to all remote peers', async () => {
@@ -152,14 +152,14 @@ describe('Tests. Primary/Common', () => {
     // Test all remote-peer clients for not-having received 'healthCheckNotification' notification
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
       const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
-      await higherOrderUtil.FAIL_verifyRemoteCaptainReceivedHealthCheckUpdate(mockClientSocketManager)
+      await higherOrderUtil.FAIL_verifyRemoteCaptainClientReceivedHealthCheckUpdate(mockClientSocketManager)
     }
     await higherOrderUtil.waitForPollToRise(webService, targetIP)
     // Test all remote-peer clients for having received 'healthCheckNotification' notification,
     // with given ip and given 'passing' times value
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
       const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
-      await higherOrderUtil.verifyRemoteCaptainReceivedHealthCheckUpdate(mockClientSocketManager, {
+      await higherOrderUtil.verifyRemoteCaptainClientReceivedHealthCheckUpdate(mockClientSocketManager, {
         ipAddress: targetIP,
         passing: webService.rise,
       })
@@ -186,7 +186,7 @@ describe('Tests. Primary/Common', () => {
     // with given ip
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
       const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
-      await higherOrderUtil.verifyRemoteCaptainReceivedHealthCheckUpdate(mockClientSocketManager, {
+      await higherOrderUtil.verifyRemoteCaptainClientReceivedHealthCheckUpdate(mockClientSocketManager, {
         ipAddress: targetIP,
       })
     }
@@ -196,7 +196,7 @@ describe('Tests. Primary/Common', () => {
     // Test all remote-peer to have received 'complete state data' on initial connect
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
       const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
-      await higherOrderUtil.verifyRemoteCaptainReceivedBulkHealthCheckUpdate(mockClientSocketManager)
+      await higherOrderUtil.verifyRemoteCaptainClientReceivedBulkHealthCheckUpdate(mockClientSocketManager)
     }
   })
 })
@@ -779,7 +779,7 @@ describe('Remote web service tests', () => {
     // All captain peers received the copy of the sevices ( broadcast )
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
       const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
-      await higherOrderUtil.verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
+      await higherOrderUtil.verifyRemoteCaptainClientReceivedNewRemoteServices(mockClientSocketManager)
     }
   })
 
@@ -805,13 +805,13 @@ describe('Remote web service tests', () => {
     expect(appState.getWebService(serviceKey)).toBeDefined()
     // Non-leader only sends it to the leader
     for (const eachCaptain of Object.keys(remoteCaptainMockUtil.mockClientSocketManagers)) {
-      const mockClientSocketManager = remoteCaptainMockUtil.mockClientSocketManagers[eachCaptain]!
+      const mockServerSocketManager = remoteCaptainMockUtil.mockServerSocketManagers[eachCaptain]!
       if (eachCaptain === leaderUrl) {
-        // Non-leader only sends it to the leader
-        await higherOrderUtil.verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
+        // Leader receives from this non-leader as being non-leader only sends it to the leader
+        await higherOrderUtil.verifyRemoteCaptainServerReceivedNewRemoteServices(mockServerSocketManager, 1, 1000)
       } else {
         // Other captain peers won't receive it from this captain
-        await higherOrderUtil.FAIL_verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager)
+        await higherOrderUtil.FAIL_verifyRemoteCaptainServerReceivedNewRemoteServices(mockServerSocketManager)
       }
     }
   })

@@ -48,7 +48,7 @@ function setupNode(nodeIndex: number) {
   })
   const eachConsulRouter = express.Router()
   eachConsulRouter.get('/v1/agent/self', (req, res) => {
-    console.log(`${routerPrefix}/v1/agent/self: called`)
+    // console.info(`${routerPrefix}/v1/agent/self: called`)
     res.json(consulDummyResponses[nodeIndex])
   })
   eachConsulRouter.post('/make-leader', (req, res) => {

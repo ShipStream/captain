@@ -2,6 +2,34 @@ import Joi from 'joi'
 
 const appConfig: any = {}
 
+// Extend joi to modify the 'number'/'string' type to accept empty string and treat it (coerce/transform) as undefined.
+// Needed for docker compose, because, in case of absense of value, docker compose sends empty string instead of not sending any value at all ( undefined ).
+// This behaviour causes issue with 'type' and 'defaultValue' as 'Joi' intreprets empty string as wrong value instead of absense of value.
+// Treating empty string as undefined solves the issue.
+const customJoi = Joi.extend(...[(joi: any) => {
+  return {
+    type: 'customNumber',
+    base: Joi.number(),
+    coerce(value: any, helpers: any) {
+      if (value === '') {
+        return { value: undefined };
+      }
+      return { value };
+    },
+  }
+}, (joi: any) => {
+  return {
+    type: 'customOptionalStr',
+    base: Joi.string().optional(),
+    coerce(value: any, helpers: any) {
+      if (value === '') {
+        return { value: undefined };
+      }
+      return { value };
+    },
+  }
+}])
+
 export function processAppEnvironement() {
   const joiEnvSchema = Joi.object()
     .keys({
@@ -16,10 +44,10 @@ export function processAppEnvironement() {
           return captainsArray
         })
         .description('CAPTAIN_URL'),
-      CAPTAIN_SECRET_KEY: Joi.string().required().description('CAPTAIN_SECRET_KEY'),
-      MATE_ID: Joi.string().description('MATE_ID'),
-      KEEP_ALIVE: Joi.number().description('KEEP_ALIVE').default(120),
-      INTERVAL: Joi.number().description('INTERVAL').default(5),
+      MATE_SECRET_KEY: Joi.string().required().description('MATE_SECRET_KEY'),
+      MATE_ID: Joi.string().required().description('MATE_ID'),
+      KEEP_ALIVE: customJoi.customNumber().description('KEEP_ALIVE').default(120),
+      INTERVAL: customJoi.customNumber().description('INTERVAL').default(5),
       DEFAULT_CONNECT_TIMEOUT: Joi.number().description('DEFAULT_CONNECT_TIMEOUT').default(2),
       DEFAULT_READ_TIMEOUT: Joi.number().description('DEFAULT_READ_TIMEOUT').default(2),
     })

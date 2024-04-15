@@ -68,11 +68,14 @@ A Captain instance has the following configuration environment variables:
 | `NOTIFICATION_URL`           | The url to post HTTP notifications to                                                                                                                                    |              |
 | `NOTIFICATION_HEADER`        | A header to include in the HTTP notification requests                                                                                                                    |              |
 
+
+
 A Mate instance has the following configuration environment variables:
 
 | Name          | Description                                                                   | Default |
 |---------------|-------------------------------------------------------------------------------|---------|
 | `CAPTAIN_URL` | The websocket url of the Captain service                                      |         |
+| `MATE_SECRET_KEY`  | The secret key to authenticate mate instance with captain |       |
 | `MATE_ID`     | The unique ID of the mate instance                                            |         |
 | `KEEP_ALIVE`  | The number of seconds to keep connections to the health check endpoints alive | 90      |
 | `INTERVAL`    | The number of seconds between local health checks                             | 5       |

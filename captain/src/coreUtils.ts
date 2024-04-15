@@ -90,7 +90,9 @@ export async function checkAndPromoteToLeader() {
  *
  */
 export async function promoteThisCaptainToLeader() {
+  logger.info('promoteThisCaptainToLeader', '###############################')
   logger.info('promoteThisCaptainToLeader', 'I AM LEADER', appConfig.SELF_URL)
+  logger.info('promoteThisCaptainToLeader', '###############################')
   appState.setLeaderUrl(appConfig.SELF_URL)
   // a). Leader needs to handle dns queries, so initialize the system if leader.
   logger.info('promoteThisCaptainToLeader', 'initializeDnsManager')

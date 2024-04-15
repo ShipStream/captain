@@ -67,7 +67,8 @@ async function beforeTestAppInitializer({
   existingDnsRecords?: {zoneRecord: string; ipAddresses: string[]}[],
   patchedAppConfig?: any,
   additionalOptions?: {
-    useFakeTimer?: boolean // Whether to use fake timer or real timer for the tests
+    useFakeTimer?: boolean // Whether to use fake timer or real timer for the tests,
+    mockMates?: boolean // Whether to mock mates, which is not needed for all tests,
   },
 } = {}) {
   processAppEnvironement()
@@ -90,7 +91,9 @@ async function beforeTestAppInitializer({
   // initialize the modules during every test as it will be cleanedup/reset after each test
   await inititalizeAppModulesUsingFakeTimers()
   // await initializeAppModules()
-  await mateMockTest.mockMateClients(mateMockTest.getMateIDs())
+  if (additionalOptions?.mockMates ?? true) {
+    await mateMockTest.mockMateClients(mateMockTest.getMateIDs())
+  }
   await commonTest.advanceBothRealAndFakeTime(1000)
   // setup '200' response all ips of all the loaded webServices
   // webAppTest.getMswServer().use(...webAppTest.failByNetworkErrorResponses([targetIP]))

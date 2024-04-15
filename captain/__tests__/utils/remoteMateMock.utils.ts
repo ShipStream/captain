@@ -15,14 +15,14 @@ import {
 const matesAppConfig = [
   {
     MATE_ID: 'mate-test-1',
-    CAPTAIN_URL: process.env.__MATE_COMMON__CAPTAIN_URL,
-    CAPTAIN_SECRET_KEY: process.env.__MATE_COMMON__CAPTAIN_SECRET_KEY,
+    CAPTAIN_URL: process.env.CAPTAIN_URL,
+    MATE_SECRET_KEY: process.env.MATE_SECRET_KEY,
     WEBSERVICE_YAML_LOCATION: process.env.__MATE_TEST_1__WEBSERVICE_YAML_LOCATION,
   },
   {
     MATE_ID: 'mate-test-2',
-    CAPTAIN_URL: process.env.__MATE_COMMON__CAPTAIN_URL,
-    CAPTAIN_SECRET_KEY: process.env.__MATE_COMMON__CAPTAIN_SECRET_KEY,
+    CAPTAIN_URL: process.env.CAPTAIN_URL,
+    MATE_SECRET_KEY: process.env.MATE_SECRET_KEY,
     WEBSERVICE_YAML_LOCATION: process.env.__MATE_TEST_2__WEBSERVICE_YAML_LOCATION,
   }
 ]
@@ -52,7 +52,7 @@ function getMateToken(mateID: string) {
     type: 'ACCESS_TOKEN',
     exp: expiryDate.getTime(),
   }
-  return jwt.sign(payLoad, getMateConf(mateID)!.CAPTAIN_SECRET_KEY!)
+  return jwt.sign(payLoad, getMateConf(mateID)!.MATE_SECRET_KEY!)
 }
 
 export class MockMateClientManager {

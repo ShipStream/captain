@@ -5,12 +5,13 @@ import {
   closeGivenServer,
   getToken,
   registerClientDebugListeners,
+  registerServerDebugListeners,
 } from '../../src/socket/captainSocketHelper.js'
 import appConfig from '../../src/appConfig.js'
 import {type WebServiceManager} from '../../src/web-service/webServiceManager.js'
 
 // Socket.io servers of the remote captain peers
-const ioServers: {[key: string]: IOServer} = {}
+const mockServerSocketManagers: {[key: string]: MockSocketServerManager} = {}
 
 // Client connection from remote peers to the main test captain instance
 const mockClientSocketManagers: {[key: string]: MockSocketClientManager} = {}
@@ -20,9 +21,67 @@ function acknowledge(ackCallback: Function | undefined, status: boolean, acknowl
     ackCallback({
       acknowledgedBy: acknowledgedBy,
       status: status ? 'ok' : 'error',
-    })  
-  }  
+    })
+  }
 }
+
+export class MockSocketServerManager {
+  captainServerUrl: string
+  port: string
+  ioServer: IOServer
+
+  constructor(captainServerUrl: string) {
+    this.captainServerUrl = captainServerUrl
+    const parsedURL = new URL(captainServerUrl)
+    this.port = parsedURL.port
+    console.log('initializeSocketServers:each', {
+      eachUrl: parsedURL,
+    })
+    // Only port needed because we use single machine for testing
+    this.ioServer = new IOServer(Number(parsedURL.port))
+    this.setupConnectionAndListeners()
+  }
+
+  setupConnectionAndListeners() {
+    // Helps identify the connection establishment for tests
+    this.ioServer.on('connection', async (socket) => {
+      socket.emit(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, [])
+      await registerServerDebugListeners(this.captainServerUrl, this.ioServer, socket)
+      socket.on(EVENT_NAMES.NEW_REMOTE_SERVICES, (payLoad, ackCallback) => {
+        this.receiveNewRemoteServices(payLoad, ackCallback)
+      })
+      socket.on(EVENT_NAMES.MATE_DISCONNECTED, (payLoad, ackCallback) => {
+        this.receiveMateDisconnected(payLoad, ackCallback)
+      })  
+
+      // after the main-test-captain-server establish connection to this peer ioServer, establish back,
+      // client connection with it
+      mockClientSocketManagers[this.captainServerUrl] = await MockSocketClientManager.createMockSocketClient(
+        appConfig.SELF_URL,
+        this.captainServerUrl
+      )
+    })
+  }
+
+  receiveNewRemoteServices(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'newRemoteServices')
+  }
+
+  receiveMateDisconnected(payLoad: any, callback?: Function) {
+    acknowledge(callback, true, 'mateDisconnected')
+  }
+
+  async cleanUpForDeletion() {
+    try {
+      await closeGivenServer(this.ioServer)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+}
+
+jest.spyOn(MockSocketServerManager.prototype, 'receiveNewRemoteServices')
+jest.spyOn(MockSocketServerManager.prototype, 'receiveMateDisconnected')
 
 export class MockSocketClientManager {
   clientSocket: ClientSocket
@@ -100,23 +159,7 @@ jest.spyOn(MockSocketClientManager.prototype, 'mateDisconnected')
 
 async function mockRemoteCaptains(otherCaptainUrls: string[]) {
   for (const eachCaptainUrl of otherCaptainUrls) {
-    const eachUrl = new URL(eachCaptainUrl)
-    console.log('initializeSocketServers:each', {
-      eachUrl,
-    })
-    const ioServer = new IOServer(Number(eachUrl.port))
-    ioServers[eachCaptainUrl] = ioServer
-    // Helps identify the connection establishment for tests
-    ioServer.on('connection', async (socket) => {
-      socket.emit(EVENT_NAMES.BULK_HEALTH_CHECK_UPDATE, [])
-
-      // after the main-test-captain-server establish connection to this peer ioServer, establish back,
-      // client connect with it
-      mockClientSocketManagers[eachCaptainUrl] = await MockSocketClientManager.createMockSocketClient(
-        appConfig.SELF_URL,
-        eachCaptainUrl
-      )
-    })
+    mockServerSocketManagers[eachCaptainUrl] = new MockSocketServerManager(eachCaptainUrl)
   }
 }
 
@@ -132,7 +175,7 @@ function receiveHealthCheckUpdateBroadcastFromAllPeers(
     passing: number
   }
 ) {
-  return receiveHealthCheckUpdateBroadcastFromPeer(Object.keys(ioServers), webService, {
+  return receiveHealthCheckUpdateBroadcastFromPeer(Object.keys(mockServerSocketManagers), webService, {
     ipAddress,
     failing,
     passing,
@@ -148,9 +191,9 @@ function receiveHealthCheckUpdateBroadcastFromPeer(
     throw new Error("Can have non-zero for only 'failing' or 'passing'")
   }
   for (const eachCaptainMemberUrl of remoteCaptains) {
-    const socketIOServer = ioServers[eachCaptainMemberUrl]
-    if (socketIOServer) {
-      socketIOServer.emit(EVENT_NAMES.HEALTH_CHECK_UPDATE, {
+    const socketIOServerManager = mockServerSocketManagers[eachCaptainMemberUrl]
+    if (socketIOServerManager) {
+      socketIOServerManager.ioServer.emit(EVENT_NAMES.HEALTH_CHECK_UPDATE, {
         member: eachCaptainMemberUrl,
         service: webService.serviceKey,
         address: ipAddress,
@@ -170,10 +213,10 @@ const receive = {
 }
 
 async function clearRemoteCaptains() {
-  let otherCaptainUrls = Object.keys(ioServers)
+  let otherCaptainUrls = Object.keys(mockServerSocketManagers)
   for (const eachCaptainUrl of otherCaptainUrls) {
-    await closeGivenServer(ioServers[eachCaptainUrl]!)
-    delete ioServers[eachCaptainUrl]
+    await mockServerSocketManagers[eachCaptainUrl]!.cleanUpForDeletion()
+    delete mockServerSocketManagers[eachCaptainUrl]
   }
 
   otherCaptainUrls = Object.keys(mockClientSocketManagers)
@@ -189,7 +232,7 @@ const socketMockTest = {
   clearRemoteCaptains,
   receive,
   mockClientSocketManagers,
-  ioServers,
+  mockServerSocketManagers,
 }
 
 export default socketMockTest

@@ -24,7 +24,7 @@ export function getToken() {
     iat: currentDate.getTime(),
     type: 'ACCESS_TOKEN',
   }
-  return jwt.sign(payLoad, appConfig.CAPTAIN_SECRET_KEY, {
+  return jwt.sign(payLoad, appConfig.MATE_SECRET_KEY, {
     expiresIn: 120
   })
 }

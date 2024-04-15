@@ -6,7 +6,7 @@ import {WebServiceManager} from '../../src/web-service/webServiceManager.js'
 import * as WebServiceHelper from '../../src/web-service/webServiceHelper.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
 import webAppTest from './appTest.utils.js'
-import {MockSocketClientManager} from './remoteCaptainMock.utils.js'
+import {MockSocketClientManager, MockSocketServerManager} from './remoteCaptainMock.utils.js'
 
 
 /**
@@ -394,7 +394,7 @@ async function waitForCoolDownAndVerifyServiceUnHealthy(webService: WebServiceMa
  *
  * @param {MockSocketClientManager} mockClientSocketManager
  */
-async function verifyRemoteCaptainReceivedNewLeader(mockClientSocketManager: MockSocketClientManager) {
+async function verifyRemoteCaptainClientReceivedNewLeader(mockClientSocketManager: MockSocketClientManager) {
   await expect(
     commonTest.waitUntilCalled(
       mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
@@ -416,7 +416,7 @@ async function verifyRemoteCaptainReceivedNewLeader(mockClientSocketManager: Moc
  *     failing?: number
  *   }} [matchData]
  */
-async function verifyRemoteCaptainReceivedHealthCheckUpdate(
+async function verifyRemoteCaptainClientReceivedHealthCheckUpdate(
   mockClientSocketManager: MockSocketClientManager,
   matchData?: {
     ipAddress?: string
@@ -452,7 +452,7 @@ async function verifyRemoteCaptainReceivedHealthCheckUpdate(
  *     failing?: number
  *   }} [matchData]
  */
-async function FAIL_verifyRemoteCaptainReceivedHealthCheckUpdate(
+async function FAIL_verifyRemoteCaptainClientReceivedHealthCheckUpdate(
   mockClientSocketManager: MockSocketClientManager,
   matchData?: {
     ipAddress?: string
@@ -481,7 +481,7 @@ async function FAIL_verifyRemoteCaptainReceivedHealthCheckUpdate(
 /**
  * Verify that the given captain received the 'BULK_HEALTH_CHECK_UPDATE' notification
  */
-async function verifyRemoteCaptainReceivedBulkHealthCheckUpdate(mockClientSocketManager: MockSocketClientManager) {
+async function verifyRemoteCaptainClientReceivedBulkHealthCheckUpdate(mockClientSocketManager: MockSocketClientManager) {
   await expect(
     commonTest.waitUntilCalled(
       mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
@@ -496,7 +496,7 @@ async function verifyRemoteCaptainReceivedBulkHealthCheckUpdate(mockClientSocket
 /**
  * Verify that the given captain didn't received the 'NEW_REMOTE_SERVICES' notification in the given time
  */
-async function FAIL_verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager: MockSocketClientManager, times: number = 1) {
+async function FAIL_verifyRemoteCaptainClientReceivedNewRemoteServices(mockClientSocketManager: MockSocketClientManager, times: number = 1) {
   await expect(
     commonTest.waitUntilCalled(
       mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
@@ -508,18 +508,47 @@ async function FAIL_verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocke
   ).rejects.toThrow()
 }
 
+/**
+ * Verify that the given captain didn't received the 'NEW_REMOTE_SERVICES' notification in the given time
+ */
+async function FAIL_verifyRemoteCaptainServerReceivedNewRemoteServices(mockServerSocketManager: MockSocketServerManager, times: number = 1) {
+  await expect(
+    commonTest.waitUntilCalled(
+      mockServerSocketManager, // socket is used as 'this' using 'apply' by socket.io lib
+      mockServerSocketManager.receiveNewRemoteServices,
+      [MATCH_ANY_VALUE],
+      times,
+      1
+    )
+  ).rejects.toThrow()
+}
 
 /**
- * Verify that the given captain received the 'NEW_REMOTE_SERVICES' notification
+ * Verify that the given captain received the 'NEW_REMOTE_SERVICES' notification via client socket
  */
-async function verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketManager: MockSocketClientManager, times: number = 1) {
+async function verifyRemoteCaptainClientReceivedNewRemoteServices(mockClientSocketManager: MockSocketClientManager, times: number = 1, timeOutInMs: number = 1000) {
   await expect(
     commonTest.waitUntilCalled(
       mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
       mockClientSocketManager.newRemoteServices,
       [MATCH_ANY_VALUE],
       times,
-      1
+      timeOutInMs
+    )
+  ).resolves.not.toThrow()
+}
+
+/**
+ * Verify that the given captain received the 'NEW_REMOTE_SERVICES' notification via server socket
+ */
+async function verifyRemoteCaptainServerReceivedNewRemoteServices(mockServerSocketManager: MockSocketServerManager, times: number = 1, timeOutInMs: number = 1000) {
+  await expect(
+    commonTest.waitUntilCalled(
+      mockServerSocketManager, // socket is used as 'this' using 'apply' by socket.io lib
+      mockServerSocketManager.receiveNewRemoteServices,
+      [MATCH_ANY_VALUE],
+      times,
+      timeOutInMs
     )
   ).resolves.not.toThrow()
 }
@@ -527,7 +556,7 @@ async function verifyRemoteCaptainReceivedNewRemoteServices(mockClientSocketMana
 /**
  * Verify that the given captain received the 'MATE_DISCONNECTED' notification
  */
-async function verifyRemoteCaptainReceivedMateDisconnected(mockClientSocketManager: MockSocketClientManager) {
+async function verifyRemoteCaptainClientReceivedMateDisconnected(mockClientSocketManager: MockSocketClientManager) {
   await expect(
     commonTest.waitUntilCalled(
       mockClientSocketManager.clientSocket, // socket is used as 'this' using 'apply' by socket.io lib
@@ -659,19 +688,21 @@ const higherOrderTest = {
   waitForHealthReset,
   waitForCoolDownAndVerifyServiceHealthy,
   waitForCoolDownAndVerifyServiceUnHealthy,
-  verifyRemoteCaptainReceivedNewLeader,
-  verifyRemoteCaptainReceivedHealthCheckUpdate,
-  FAIL_verifyRemoteCaptainReceivedHealthCheckUpdate,
-  verifyRemoteCaptainReceivedBulkHealthCheckUpdate,
+  verifyRemoteCaptainClientReceivedNewLeader,
+  verifyRemoteCaptainClientReceivedHealthCheckUpdate,
+  FAIL_verifyRemoteCaptainClientReceivedHealthCheckUpdate,
+  verifyRemoteCaptainClientReceivedBulkHealthCheckUpdate,
   waitForFailOverInit,
   FAIL_waitForFailOverInit,
-  verifyRemoteCaptainReceivedNewRemoteServices,
-  FAIL_verifyRemoteCaptainReceivedNewRemoteServices,  
-  verifyRemoteCaptainReceivedMateDisconnected,
+  verifyRemoteCaptainClientReceivedNewRemoteServices,
+  FAIL_verifyRemoteCaptainClientReceivedNewRemoteServices,
+  verifyRemoteCaptainClientReceivedMateDisconnected,
   FAIL_waitUntilServiceRegistered,
   waitUntilServiceRegistered,
   FAIL_waitForPollCount,
   waitForPollCount,
+  verifyRemoteCaptainServerReceivedNewRemoteServices,
+  FAIL_verifyRemoteCaptainServerReceivedNewRemoteServices,
 }
 
 export default higherOrderTest

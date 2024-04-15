@@ -6,7 +6,7 @@ services:
       service: captain-template
     environment:
       - SELF_URL=ws://10.5.0.11:7400
-      # real consul installed
+      # # real consul installed
       # - CONSUL_HTTP_ADDR=http://127.0.0.1:8500
       # dummy consul
       - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-1
@@ -14,9 +14,10 @@ services:
       custom-network:
         ipv4_address: 10.5.0.11
     volumes:
-      - ./__simulation__/real-consul-app/server1.json:/consul/config/server1.json:ro
+      - ./captain/__simulation__/real-consul-app/server1.json:/consul/config/server1.json:ro
     ports: 
       - 8001:80
+      # following 3 ports needed only when running hashicorp-consul inside each container instead of dummy-consul
       - 8500:8500
       - 8600:8600/tcp
       - 8600:8600/udp
@@ -32,7 +33,7 @@ services:
       service: captain-template
     environment:
       - SELF_URL=ws://10.5.0.12:7400
-      # real consul installed
+      # # real consul installed
       # - CONSUL_HTTP_ADDR=http://127.0.0.1:8500
       # dummy consul
       - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-2
@@ -40,7 +41,7 @@ services:
       custom-network:
         ipv4_address: 10.5.0.12
     volumes:
-      - ./__simulation__/real-consul-app/server2.json:/consul/config/server2.json:ro
+      - ./captain/__simulation__/real-consul-app/server2.json:/consul/config/server2.json:ro
     ports: 
       - 8002:80
     depends_on:
@@ -55,7 +56,7 @@ services:
       service: captain-template
     environment:
       - SELF_URL=ws://10.5.0.13:7400
-      # real consul installed
+      # # real consul installed
       # - CONSUL_HTTP_ADDR=http://127.0.0.1:8500
       # dummy consul
       - CONSUL_HTTP_ADDR=http://dummy-consul-apps/consul-3
@@ -63,7 +64,7 @@ services:
       custom-network:
         ipv4_address: 10.5.0.13
     volumes:
-      - ./__simulation__/real-consul-app/server3.json:/consul/config/server3.json:ro
+      - ./captain/__simulation__/real-consul-app/server3.json:/consul/config/server3.json:ro
     ports: 
       - 8003:80
     depends_on:
@@ -153,6 +154,8 @@ services:
     extends:
       file: docker-compose-base.yml
       service: dns-server-template
+    volumes:
+      - technitium-config:/etc/dns
     networks:
       custom-network:
         ipv4_address: 10.5.0.2
@@ -197,21 +200,26 @@ services:
     extends: 
       file: docker-compose-base.yml
       service: captain-template
-    command: ['pnpm i --config.confirmModulesPurge=false']
+    command: ['pnpm i --config.confirmModulesPurge=false --unsafe-perm=true']
   mate-apps-install-packages:
     extends: 
       file: docker-compose-base.yml
       service: mate-template
-    command: ['pnpm i --config.confirmModulesPurge=false']
+    command: ['pnpm i --config.confirmModulesPurge=false --unsafe-perm=true']
   dummy-apps-install-packages:
     extends: 
       file: docker-compose-base.yml
       service: dummy-apps
-    command: ['pnpm i --config.confirmModulesPurge=false']
+    command: ['pnpm i --config.confirmModulesPurge=false --unsafe-perm=true']
+
+volumes:
+  technitium-config:
+    name: '${COMPOSE_PROJECT_NAME}-technitium-config'
+    external: false
 
 networks:
   custom-network:
-    name: ${COMPOSE_PROJECT_NAME}-captain-dev-network
+    name: ${COMPOSE_PROJECT_NAME}-network
     driver: bridge
     # disable ipv6 to simplify network setup
     enable_ipv6: false

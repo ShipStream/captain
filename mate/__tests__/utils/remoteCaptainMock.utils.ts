@@ -41,13 +41,13 @@ export class MockCaptainSocketServer {
 
   // receive 'NEW_REMOTE_SERVICES' from connected 'mate'
   newRemoteServices(payLoad: any, callback?: Function) {
-    console.info('received', MATE_EVENT_NAMES.NEW_REMOTE_SERVICES)
+    console.info('MockCaptainSocketServer:received', MATE_EVENT_NAMES.NEW_REMOTE_SERVICES)
     acknowledge(callback, true, 'newRemoteServices')
   }
 
   // receive 'SERVICE_STATE_CHANGE' from connected 'mate'
   serviceStateChange(payLoad: any, callback?: Function) {
-    console.info('received', MATE_EVENT_NAMES.SERVICE_STATE_CHANGE)
+    console.info('MockCaptainSocketServer:received', MATE_EVENT_NAMES.SERVICE_STATE_CHANGE)
     acknowledge(callback, true, 'serviceStateChange')
   }
 

@@ -11,7 +11,12 @@ docker start  `docker ps -a| grep captain-1 | awk 'NR==1{print $1}'`
 # is container running
 docker container inspect -f '{{.State.Running}}'  `docker ps -a| grep mate-1 | awk 'NR==1{print $1}'`
 
-2). logs for captain and mates
+2). login to the running containers
+eg: captain-1
+
+docker exec -ti `docker ps | grep captain-1 | awk 'NR==1{print $1}'` /bin/sh
+
+3). logs for captain and mates
 docker logs `docker ps | grep captain-1 | awk 'NR==1{print $1}'` -f -n 10
 docker logs `docker ps | grep captain-2 | awk 'NR==1{print $1}'` -f -n 10
 docker logs `docker ps | grep captain-3 | awk 'NR==1{print $1}'` -f -n 10
@@ -19,7 +24,11 @@ docker logs `docker ps | grep captain-3 | awk 'NR==1{print $1}'` -f -n 10
 docker logs `docker ps | grep mate-1 | awk 'NR==1{print $1}'` -f -n 10
 docker logs `docker ps | grep mate-2 | awk 'NR==1{print $1}'` -f -n 10
 
-3). manage dummy-consul
+4). manage real consul
+a). consul details
+docker exec `docker ps | grep captain-1 | awk 'NR==1{print $1}'` consul-details.sh
+
+5). manage dummy-consul
 a).logs
 docker logs `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` -f -n 10
 
@@ -31,7 +40,7 @@ docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X
 docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-2/make-leader
 docker exec `docker ps | grep dummy-consul-apps | awk 'NR==1{print $1}'` curl -X POST http://localhost:80/consul-3/make-leader
 
-4). manage web apps
+6). manage web apps
 a).all ips (up/down) needs to be added to 'multi-ip-dummy-web-app' definition container in compose file
 
 b).check health manually

@@ -7,7 +7,7 @@ export const ERROR_DNS_ZONE_NOT_INITIALIZED_PREFIX = `No such authoritative zone
 export const ERROR_DNS_ZONE_ALREADY_EXISTS = `Zone already exists:`
 
 const USER_NAME = 'admin'
-const PASSWORD = 'admin'
+const PASSWORD = 'abcdef'
 
 /**
  * Common handler for typical response from technitium
