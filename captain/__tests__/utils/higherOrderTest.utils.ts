@@ -203,6 +203,21 @@ async function waitForAddressChangeInit(
 }
 
 /**
+ * Dns zone records broadcast to other captains from leader ( done after the activeAddressSync operation with dnsprovider is completed ).
+ *
+ * @param {WebServiceManager} webService
+ * @param {number} [times=1]
+ */
+async function waitForAddressChangeBroadcast(
+  webService: WebServiceManager,
+  times: number = 1
+) {
+  await expect(
+    commonTest.waitUntilCalled(appState.getSocketManager(), 'broadcastActiveAddresses', [webService], times, 10000)
+  ).resolves.not.toThrow()
+}
+
+/**
  * Ensure failure to make the call to update dns zone record.
  *
  * @param {WebServiceManager} webService
@@ -302,7 +317,7 @@ async function verifyActiveAndResolvedAddresses(
   shouldWaitForAddressChangeInit = true
 ) {
   if (shouldWaitForAddressChangeInit) {
-    await waitForAddressChangeInit(webService, targetActiveAddresses)
+    await waitForAddressChangeBroadcast(webService)
   }
   expect(new Set(targetActiveAddresses)).toEqual(new Set(webService.serviceState.active))
   await commonTest.advanceBothRealAndFakeTime(1000)
@@ -679,6 +694,7 @@ const higherOrderTest = {
   waitForPollToFall,
   waitForAddressChangeInit,
   FAIL_waitForAddressChangeInit,
+  waitForAddressChangeBroadcast,
   verifyActiveAndResolvedAddresses,
   FAIL_verifyActiveAndResolvedContain,
   verifyActiveAndResolvedAddressCount,

@@ -107,6 +107,8 @@ async function addZoneRecord(zoneRecord: string, ipAddress: string) {
   // logger.info('addZoneRecord', params)
   const addZoneRecordResponse = await fetchData(`/api/zones/records/add?${params}`)
   logger.info('addZoneRecord', {
+    zoneRecord,
+    ipAddress,
     addZoneRecordResponse,
   })
 }
@@ -131,6 +133,8 @@ async function removeZoneRecord(zoneRecord: string, ipAddress: string) {
   // logger.info('removeZoneRecord', params)
   const removeZoneRecordResponse = await fetchData(`/api/zones/records/delete?${params}`)
   logger.info('removeZoneRecord', {
+    zoneRecord,
+    ipAddress,
     removeZoneRecordResponse,
   })
 }
@@ -139,7 +143,10 @@ async function removeZoneRecord(zoneRecord: string, ipAddress: string) {
  * Convenience method for removing multiple zone records
  */
 async function removeZoneRecordMulti(zoneRecord: string, ipAddresses: string[]): Promise<void> {
-  await Promise.all(ipAddresses.map((eachIpAddress) => removeZoneRecord(zoneRecord, eachIpAddress)))
+  // Due to an issue with multiple simultaneous deletion, doing deletion one by one in loop
+  for(const eachIpToBeDeleted of ipAddresses) {
+    await removeZoneRecord(zoneRecord, eachIpToBeDeleted)
+  }
 }
 
 /**

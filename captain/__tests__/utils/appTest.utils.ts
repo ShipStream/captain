@@ -6,6 +6,7 @@ import {WebServiceManager} from '../../src/web-service/webServiceManager.js'
 import * as WebServiceHelper from '../../src/web-service/webServiceHelper.js'
 import {WEB_SERVICE_STATUS} from '../../src/web-service/webServiceHelper.js'
 import {initializeAppModules} from '../../src/coreUtils.js'
+import { CaptainSocketServerManager } from '../../src/socket/SocketServerManager.js'
 import technitiumDnsManager, {
   createZoneIfNotAvailable,
   deleteZoneWithAllEntries,
@@ -32,6 +33,7 @@ jest.spyOn(WebServiceManager.prototype, 'pollEachAddress')
 jest.spyOn(WebServiceManager.prototype, 'beginFailOverProcess')
 jest.spyOn(WebServiceHelper.default, 'checkCombinedPeerStateAndInitiateAddActiveIP')
 jest.spyOn(WebServiceHelper.default, 'checkCombinedPeerStateAndInitiateRemoveActiveIP')
+jest.spyOn(CaptainSocketServerManager.prototype, 'broadcastActiveAddresses')
 
 /**
  * Fake timers requires manual control/passage of time and for long process like 'initializeAppModules',

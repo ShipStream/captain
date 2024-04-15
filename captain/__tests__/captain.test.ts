@@ -584,8 +584,8 @@ describe('Tests Custom. With multi=true', () => {
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, targetActiveAddresses)
   })
   test('Case: Existing-UnKnown-DnsEntries. On Bootstrap, all ips from services.yaml, set as activeAddresses and synced (unknowns removed) with dns-provider', async () => {
-    const unKnownTargetIP1 = '10.5.0.123'
-    const unKnownTargetIP2 = '10.5.0.124'
+    const unKnownTargetIP1 = '10.5.0.223'
+    const unKnownTargetIP2 = '10.5.0.224'
     await appTestUtil.beforeTestAppInitializer({
       existingDnsRecords: [{zoneRecord: zoneRecord, ipAddresses: [unKnownTargetIP1, unKnownTargetIP2]}],
     })
