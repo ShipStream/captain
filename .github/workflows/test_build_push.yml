@@ -34,9 +34,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run tests for captain
-        run: npm run captain-test
+        run: npm run docker:captain-test
       - name: Run tests for mate
-        run: npm run mate-test
+        run: npm run docker:mate-test
       - name: Obtain tag information for captain
         id: meta-captain
         uses: docker/metadata-action@v5
