@@ -1,9 +1,10 @@
 import {ReadableStream} from 'stream/web'
-import {delay, http, passthrough, HttpResponse as mswHttpResponse, RequestHandlerOptions, RequestHandler} from 'msw'
+import {delay, http, passthrough, HttpResponse as mswHttpResponse, RequestHandler} from 'msw'
 import {SetupServer, setupServer as setupMswServer} from 'msw/node'
 import appConfig from '../../src/appConfig.js'
 import {NotificationService} from '../../src/NotificationService.js'
 import { ConsulService } from '../../src/ConsulService.js'
+import { logger } from '../../src/coreUtils.js'
 
 function passingResponses(ipList: Array<string>) {
   return ipList.map((eachIp) => {
@@ -167,7 +168,7 @@ function setupMswReqMocks() {
       http.post(NotificationService.getGenericNotificationUrl()!, async ({request, params, cookies}) => {
         const HTTP_HEADER_KEY = 'notify_token'
         const HTTP_HEADER_VALUE = 'dummy-sample-token-value'
-        console.log('post-custom-message', {
+        logger.info('post-custom-message', {
           'req.headers?.[HTTP_HEADER_KEY]': request.headers.get(HTTP_HEADER_KEY),
           HTTP_HEADER_VALUE: HTTP_HEADER_VALUE,
         })

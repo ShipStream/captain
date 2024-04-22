@@ -35,8 +35,10 @@ export function processAppEnvironement() {
   const joiEnvSchema = Joi.object()
     .keys({
       NODE_ENV: Joi.string().valid('production', 'development', 'test').default('development'),
+      // setting DEBUG=captain will enable debug mode
+      // debug can be a comma separated list of modules ('captain' being one among them)
+      // eg: DEBUG=mate,captain
       DEBUG: Joi.string().custom((value) => {
-        // setting DEBUG=captain will enable debug mode
         if (
           `${value}`
             .split(',')

@@ -551,6 +551,64 @@ Return the status of the Captain cluster
 }
 ```
 
+# Setup
+
+This section provides more details about the environment variable requirements. In case of, both captain/mate, multiple instances are run simultaneously and most 'env' variables are common for all instances but some changes for each instance.
+
+## Common(for all instances) environment variables
+For regular 'development' setup, only the following 'env' variables needs to be given
+
+CAPTAIN_SECRET_KEY  
+MATE_SECRET_KEY
+
+By default 'development' setup uses 'technitium' (docker based dns provider) which doesn't require any other 'env' variables.
+
+When 'cloudflare' needs to be used, the following needs to be provided
+
+DNS_PROVIDER=cloudflare  
+CLOUDFLARE_TOKEN  
+CLOUDFLARE_ZONE_ID
+
+Debug logs can be enabled for both 'captain' and 'mate' as follows
+
+Enable debug logs for 'captain'  
+DEBUG=captain
+
+Enable debug logs for 'mate'  
+DEBUG=mate
+
+Enable debug logs for both 'captain' and 'mate' when a common .env file is used
+DEBUG=captain,mate
+
+The above methodology is used for 'DEBUG' because, potentially we could be defining the 'env' variables for both 'captain' and 'mate' in a single .env file during development
+
+What is considered a normal log for development/production can be little too much for testing,
+due to constant tear down and initialization and the related logs.
+So, in case of testing 'DEBUG' needs to be enabled even to see 'info' messages, only 'warn'/'error' will be displayed by default when NODE_ENV is 'test'
+
+In addition, for 'production' the following needs to be provided, which are pre-configured directly in docker-compose for 'development'
+
+MEMBER_URLS
+
+## Per instance environment variables
+
+There are variables that change for each instance of captain/mate. These are configured per node instance in docker-compose during 'development'.
+
+For 'production' we need to ensure they are provided for each instance of captain/mate.
+
+### For captain
+SELF_URL  
+CONSUL_HTTP_ADDR ( required only when HA needs to be enabled )  
+CONSUL_HTTP_TOKEN ( required only when HA needs to be enabled )  
+
+### For mate
+
+MATE_ID  
+CAPTAIN_URL
+
+The file, '.env.sample' has only the essential variables defined.
+It can be copied to .env during development and can also be referenced for 'production' setup.
+
 # Copyright and License
 
 Copyright 2024-present ShipStream, LLC

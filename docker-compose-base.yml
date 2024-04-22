@@ -32,6 +32,7 @@ services:
       - DATADOG_SITE=${DATADOG_SITE-}
       - NOTIFICATION_URL=${NOTIFICATION_URL-}
       - NOTIFICATION_HEADER=${NOTIFICATION_HEADER-}
+      # - DEBUG=captain
     volumes:
       - ./captain:/app
       - ./__simulation__/data:/data
@@ -54,6 +55,7 @@ services:
       - KEEP_ALIVE=${KEEP_ALIVE-}
       - INTERVAL=${INTERVAL-}
       - MATE_SECRET_KEY=${MATE_SECRET_KEY-}
+      # - DEBUG=mate
     volumes:
       - ./mate:/app
       - ./__simulation__/data:/data

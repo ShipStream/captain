@@ -47,7 +47,7 @@ async function waitForAllIpsOfTheServiceToBePassing(webService: WebServiceManage
   // const startTime = Date.now()
   await expect(
     commonTest.waitUntilPredicateSucceeds(() => {
-      // console.log('waitForAllIpsOfTheServiceToBePassing', {
+      // logger.info('waitForAllIpsOfTheServiceToBePassing', {
       //   timeOutInMs,
       //   remainingTimeInMs: timeOutInMs - (Date.now() - startTime),
       //   state: webService.serviceState.checks,

@@ -12,6 +12,7 @@ services:
       - CAPTAIN_URL=ws://127.0.0.1:7401,ws://127.0.0.1:7402,ws://127.0.0.1:7403
       - WEBSERVICE_YAML_LOCATION=./__tests__/data/mate-1-services.yaml
       - MATE_ID=mate-1
+      # - DEBUG=mate
     volumes:
       - /app/.pnpm-store
       - /app/node_modules

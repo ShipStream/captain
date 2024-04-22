@@ -5,6 +5,7 @@ import './env/mateTest.env.js'
 import console from 'console'
 import appConfig from '../src/appConfig.js'
 import appState from '../src/appState.js'
+import { logger } from '../src/coreUtils.js'
 import appTestUtil from './utils/appTest.utils.js'
 import requestMockUtil from './utils/requestMock.utils.js'
 import commonTestUtil, { MATCH_ANY_VALUE } from './utils/commonTest.utils.js'
@@ -72,7 +73,7 @@ describe('Tests. Primary/Common', () => {
       // Expect 'one' call made  between min and max time
       expect(calls.length).toBe(1)
       expect(timeSpent > minTimeBetweenRoundRobin && timeSpent < maxTimeBetweenRoundRobin).toBe(true)
-      console.log('Service Ips checked at "INTERVAL"', {
+      logger.info('Service Ips checked at "INTERVAL"', {
         noOfCalls: calls.length,
         timeSpent,
         minTimeBetweenRoundRobin,

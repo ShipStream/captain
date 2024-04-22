@@ -32,6 +32,7 @@ services:
       - NOTIFICATION_HEADER={"notify_token":"dummy-sample-token-value"}
       - WEBSERVICE_YAML_LOCATION=./__tests__/data/captain-one-services.yaml
       - MATE_PORT=7450
+      # - DEBUG=captain
       # common to both captain and mate
       - MATE_SECRET_KEY=ksjdhf2q34m23nlfWS69ri
       # mate properties

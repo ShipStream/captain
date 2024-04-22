@@ -34,7 +34,21 @@ export function processAppEnvironement() {
   const joiEnvSchema = Joi.object()
     .keys({
       NODE_ENV: Joi.string().valid('production', 'development', 'test').default('development'),
-      DEBUG_MATE: Joi.boolean().description('DEBUG_MATE'),
+      // setting DEBUG=mate will enable debug mode
+      // debug can be a comma separated list of modules ('mate' being one among them)
+      // eg: DEBUG=mate,captain
+      DEBUG: Joi.string().custom((value) => {
+        if (
+          `${value}`
+            .split(',')
+            .map((eachValue) => `${eachValue}`.trim())
+            .includes('mate')
+        ) {
+          return true
+        } else {
+          return false
+        }
+      }),
       WEBSERVICE_YAML_LOCATION: Joi.string().description('WEBSERVICE_YAML_LOCATION').default('/data/services.yaml'),
       CAPTAIN_URL: Joi.string()
         .required()

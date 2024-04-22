@@ -14,6 +14,7 @@ import remoteMateMockUtil from './utils/remoteMateMock.utils.js'
 import higherOrderUtil from './utils/higherOrderTest.utils.js'
 import {NotificationService} from '../src/NotificationService.js'
 import {initializeDnsManager} from '../src/dns/dnsManager.js'
+import { logger } from '../src/coreUtils.js'
 
 const notificationCalls = {
   datadogSuccessCall: jest.fn(),
@@ -370,7 +371,7 @@ describe('Tests. With multi=false', () => {
       failing: 0,
       passing: 3,
     })
-    console.log('jest.clearAllMocks:after:2', (webService.pollSuccess as any)?.mock?.calls)
+    logger.info('jest.clearAllMocks:after:2', (webService.pollSuccess as any)?.mock?.calls)
     await higherOrderUtil.verifyActiveAndResolvedAddresses(webService, [laterHealthyFailoverIP])
     higherOrderUtil.verifyFailOverStatus(webService, WebServiceHelper.FAILOVER_PROGRESS.DNS_UPDATED)
     await higherOrderUtil.waitForCoolDownAndVerifyServiceHealthy(webService)

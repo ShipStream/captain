@@ -11,6 +11,7 @@ import {
   MATE_EVENT_NAMES,
   registerClientDebugListeners,
 } from '../../src/socket/captainSocketHelper.js'
+import { logger } from '../../src/coreUtils.js'
 
 const matesAppConfig = [
   {
@@ -76,7 +77,7 @@ export class MockMateClientManager {
     try {
       this.clientSocket.close()
     } catch (e) {
-      console.error(e)
+      logger.error(e)
     }
   }
 }
@@ -117,7 +118,7 @@ function emitServiceStateChangeMessageFromGivenMates(mateList: string[], service
     const mateConf = getMateConf(eachMateID)
     const mockSocketClientManager = mockClientSocketManagers[eachMateID]
     if (mockSocketClientManager) {
-      console.log(eachMateID, 'receiveServiceStateChangeMessageFromGivenMates')
+      logger.info(eachMateID, 'receiveServiceStateChangeMessageFromGivenMates')
       mockSocketClientManager.clientSocket.emit(MATE_EVENT_NAMES.SERVICE_STATE_CHANGE, {
         mate_id: eachMateID,
         service: serviceKey,
@@ -136,37 +137,37 @@ let messageIDCounter = 1
  *
  */
 async function emitNewRemoteServicesFromGivenMates(mateList: string[]) {
-  console.log('emitNewRemoteServicesFromGivenMates:1', {
+  logger.info('emitNewRemoteServicesFromGivenMates:1', {
     mateList,
     mockClientSocketManagers,
   })
   for (const eachMateID of mateList) {
     const mockSocketClientManager = mockClientSocketManagers[eachMateID]
-    console.log('emitNewRemoteServicesFromGivenMates:2', {
+    logger.info('emitNewRemoteServicesFromGivenMates:2', {
       mateList,
       mockClientSocketManagers,
     })
     if (mockSocketClientManager) {
       const mateConf = getMateConf(eachMateID)!
-      console.log('emitNewRemoteServicesFromGivenMates:3', {
+      logger.info('emitNewRemoteServicesFromGivenMates:3', {
         mateConf,
       })
       const servicesFile = await fs.readFile(mateConf.WEBSERVICE_YAML_LOCATION!, 'utf8')
-      // console.log('emitNewRemoteServicesFromGivenMates:4', { servicesFile, file: mateConf.WEBSERVICE_YAML_LOCATION })
+      // logger.info('emitNewRemoteServicesFromGivenMates:4', { servicesFile, file: mateConf.WEBSERVICE_YAML_LOCATION })
       const loadedYaml = YAML.parse(servicesFile)
-      // console.log('emitNewRemoteServicesFromGivenMates:5', { loadedYaml })
+      // logger.info('emitNewRemoteServicesFromGivenMates:5', { loadedYaml })
       const servicesPayload = loadedYaml?.services.map((serviceConf: any) => {
         // Send everything except 'mate' property from yaml data
         delete serviceConf.mate;
         return serviceConf
       })
-      // console.log('emitNewRemoteServicesFromGivenMates:6', { servicesPayload })
+      // logger.info('emitNewRemoteServicesFromGivenMates:6', { servicesPayload })
       mockSocketClientManager.clientSocket.emit(MATE_EVENT_NAMES.NEW_REMOTE_SERVICES, {
         message_id: `${eachMateID}-${messageIDCounter++}`,
         mate_id: eachMateID,
         services: servicesPayload
       })
-      // console.log('emitNewRemoteServicesFromGivenMates:6', { eachMateID, servicesPayload })
+      // logger.info('emitNewRemoteServicesFromGivenMates:6', { eachMateID, servicesPayload })
     } else {
       throw new Error(`Given remote captain "${eachMateID}" is not known/configured/mocked`)
     }

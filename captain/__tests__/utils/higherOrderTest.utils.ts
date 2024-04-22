@@ -4,6 +4,7 @@ import appState from '../../src/appState.js'
 import {dnsManager} from '../../src/dns/dnsManager.js'
 import {WebServiceManager} from '../../src/web-service/webServiceManager.js'
 import * as WebServiceHelper from '../../src/web-service/webServiceHelper.js'
+import { logger } from '../../src/coreUtils.js'
 import commonTest, {MATCH_ANY_VALUE} from './commonTest.utils.js'
 import webAppTest from './appTest.utils.js'
 import {MockSocketClientManager, MockSocketServerManager} from './remoteCaptainMock.utils.js'
@@ -303,7 +304,7 @@ async function verifyActiveAndResolvedAddressCount(
   expect(webService.serviceState.active.length).toBe(noOfAddresses)
   await commonTest.advanceBothRealAndFakeTime(5000)
   const resolvedAddresses = await dnsManager.resolvedAddresses(webService.serviceConf.zone_record)
-  console.log({resolvedAddresses, activeAddresses: webService.serviceState.active})
+  logger.info({resolvedAddresses, activeAddresses: webService.serviceState.active})
   expect(resolvedAddresses.length).toBe(noOfAddresses)
 }
 
@@ -322,7 +323,7 @@ async function verifyActiveAndResolvedAddresses(
   expect(new Set(targetActiveAddresses)).toEqual(new Set(webService.serviceState.active))
   await commonTest.advanceBothRealAndFakeTime(1000)
   let resolvedAddresses = await dnsManager.resolvedAddresses(webService.serviceConf.zone_record)
-  console.log({targetActiveAddresses, resolvedAddresses, activeAddresses: webService.serviceState.active})
+  logger.info({targetActiveAddresses, resolvedAddresses, activeAddresses: webService.serviceState.active})
   expect(new Set(targetActiveAddresses)).toEqual(new Set(resolvedAddresses))
 }
 
@@ -345,7 +346,7 @@ async function FAIL_verifyActiveAndResolvedContain(webService: WebServiceManager
     }
     throw e
   })
-  console.log({targetAddress, resolvedAddresses, activeAddresses: webService.serviceState.active})
+  logger.info({targetAddress, resolvedAddresses, activeAddresses: webService.serviceState.active})
   expect(resolvedAddresses || []).not.toContain(targetAddress)
 }
 

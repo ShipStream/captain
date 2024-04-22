@@ -2,6 +2,7 @@ import {ReadableStream} from 'stream/web'
 import {delay, http, passthrough, HttpResponse as mswHttpResponse, RequestHandler} from 'msw'
 import {SetupServer, setupServer as setupMswServer} from 'msw/node'
 import appConfig from '../../src/appConfig.js'
+import { logger } from '../../src/coreUtils.js'
 
 function passingResponses(ipList: Array<string>) {
   return ipList.map((eachIp) => {
@@ -12,9 +13,9 @@ function passingResponses(ipList: Array<string>) {
 }
 
 function passingWithDelayResponses(ipList: Array<string>, delayInMs: number) {
-  console.log('passingWithDelayResponses', ipList)
+  logger.info('passingWithDelayResponses', ipList)
   return ipList.map((eachIp) => {
-    console.log('passingWithDelayResponses:eachIp', eachIp)
+    logger.info('passingWithDelayResponses:eachIp', eachIp)
     return http.get(`http://${eachIp}/health`, async ({request, params, cookies}) => {
       const stream = new ReadableStream({
         async start(controller) {

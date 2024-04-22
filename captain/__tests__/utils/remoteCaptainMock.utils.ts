@@ -9,6 +9,7 @@ import {
 } from '../../src/socket/captainSocketHelper.js'
 import appConfig from '../../src/appConfig.js'
 import {type WebServiceManager} from '../../src/web-service/webServiceManager.js'
+import { logger } from '../../src/coreUtils.js'
 
 // Socket.io servers of the remote captain peers
 const mockServerSocketManagers: {[key: string]: MockSocketServerManager} = {}
@@ -34,7 +35,7 @@ export class MockSocketServerManager {
     this.captainServerUrl = captainServerUrl
     const parsedURL = new URL(captainServerUrl)
     this.port = parsedURL.port
-    console.log('initializeSocketServers:each', {
+    logger.info('initializeSocketServers:each', {
       eachUrl: parsedURL,
     })
     // Only port needed because we use single machine for testing
@@ -75,7 +76,7 @@ export class MockSocketServerManager {
     try {
       await closeGivenServer(this.ioServer)
     } catch (e) {
-      console.error(e)
+      logger.error(e)
     }
   }
 }
@@ -142,7 +143,7 @@ export class MockSocketClientManager {
     try {
       this.clientSocket.close()
     } catch (e) {
-      console.error(e)
+      logger.error(e)
     }
   }
 }

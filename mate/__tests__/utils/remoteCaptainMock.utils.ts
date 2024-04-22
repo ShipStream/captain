@@ -1,4 +1,5 @@
 import { MATE_EVENT_NAMES } from './../../src/SocketClientManager.js'
+import { logger } from './../../src/coreUtils.js'
 import {Server as IOServer, Socket as ServerSocket} from 'socket.io'
 import commonTest from './commonTest.utils.js'
 
@@ -7,7 +8,7 @@ export function closeGivenServer(server?: IOServer) {
     return new Promise<void>((resolve, reject) => {
       server.close((err) => {
         if (err) {
-          console.error('Error closing connections', err?.message || err)
+          logger.error('Error closing connections', err?.message || err)
           return reject(err)
         }
         return resolve()
@@ -41,20 +42,20 @@ export class MockCaptainSocketServer {
 
   // receive 'NEW_REMOTE_SERVICES' from connected 'mate'
   newRemoteServices(payLoad: any, callback?: Function) {
-    console.info('MockCaptainSocketServer:received', MATE_EVENT_NAMES.NEW_REMOTE_SERVICES)
+    logger.info('MockCaptainSocketServer:received', MATE_EVENT_NAMES.NEW_REMOTE_SERVICES)
     acknowledge(callback, true, 'newRemoteServices')
   }
 
   // receive 'SERVICE_STATE_CHANGE' from connected 'mate'
   serviceStateChange(payLoad: any, callback?: Function) {
-    console.info('MockCaptainSocketServer:received', MATE_EVENT_NAMES.SERVICE_STATE_CHANGE)
+    logger.info('MockCaptainSocketServer:received', MATE_EVENT_NAMES.SERVICE_STATE_CHANGE)
     acknowledge(callback, true, 'serviceStateChange')
   }
 
   eachMateConnectionAndListeners(socket: ServerSocket) {
     const mateID = `${socket.handshake.query?.clientOrigin}`
     const logID = `MATE_SOCKET_SERVER_LOG_ID(Remote Client: ${mateID})`
-    console.info(`${logID}: New connection: registerListeners`, {
+    logger.info(`${logID}: New connection: registerListeners`, {
       new: [socket.id, mateID],
     })
     socket.on(MATE_EVENT_NAMES.NEW_REMOTE_SERVICES, this.newRemoteServices)
@@ -70,7 +71,7 @@ export class MockCaptainSocketServer {
   constructor(inputCaptainUrl: string) {
     this.captainUrl = inputCaptainUrl
     const captainURLObject = new URL(this.captainUrl)
-    console.log('initializeSocketServers:captainURLObject', {
+    logger.info('initializeSocketServers:captainURLObject', {
       captainURLObject,
     })
     this.ioServer = new IOServer(Number(captainURLObject.port))

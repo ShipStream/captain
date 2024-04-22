@@ -309,7 +309,9 @@ export class CaptainSocketServerManager {
     try {
       await closeGivenServer(this.io)
     } catch (e: any) {
-      logger.error('CaptainSocketServerManager:cleanUpForDeletion', e?.message || e)
+      if (e?.message !== 'Server is not running.') { // already cleaned up
+        logger.error('CaptainSocketServerManager:cleanUpForDeletion', e?.message || e)
+      }
     }
   }
 

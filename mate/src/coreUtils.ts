@@ -21,9 +21,9 @@ class Logger {
    * @memberof Logger
    */
   debug(message: any, ...params: any[]) {
-    // if (appConfig.DEBUG) {
-    // console.log(message, ...params)
-    // }
+    if (appConfig.DEBUG) {
+      console.log(message, ...params)
+    }
   }
 
   /**
@@ -34,7 +34,15 @@ class Logger {
    * @memberof Logger
    */
   info(message: any, ...params: any[]) {
-    console.log(message, ...params)
+    // What is considered a normal log for development/production can be little too much for testing,
+    // due to constant tear down and initialization and the related logs.
+    // So, in case of testing 'DEBUG' needs to be enabled even to see 'info' messages,
+    // only 'warn'/'error' will be displayed by default when NODE_ENV is 'test'        
+    if (appConfig.NODE_ENV === 'test') {
+      this.debug(message, ...params)
+    } else {
+      console.log(message, ...params)
+    }
   }
 
   /**

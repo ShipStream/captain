@@ -1,4 +1,5 @@
 import console from 'console'
+import { logger } from '../../src/coreUtils.js'
 import {isAsyncFunction} from 'util/types'
 
 // Used to match any argument value during method spy/stub 'call' matching algorithm
@@ -58,7 +59,7 @@ async function passTimeInMillis(millis: number) {
 }
 
 function attentionLog(...mesages: any[]) {
-  console.log(`@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n
+  logger.info(`@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n
 ${JSON.stringify(mesages, undefined, 2)}
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n`)
 }
@@ -75,7 +76,7 @@ function getSpyDataForInstance(instanceObject: any, spiedPrototypFunction: jest.
   classMockData.contexts?.map((eachContent: any, eachContextIndex: number) => {
     // // for debugging
     // if (eachContent?.toString() === instanceObject?.toString() || eachContent === instanceObject) {
-    //   console.log('getSpyCallsForThisInstance:matching', {
+    //   logger.info('getSpyCallsForThisInstance:matching', {
     //     instanceObject: instanceObject.toString(),
     //     eachContent: eachContent.toString(),
     //     calls: calls[eachContextIndex],
@@ -164,7 +165,7 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
             requiredValue === invokedValue ||
             requiredValue === MATCH_ANY_VALUE ||
             (Array.isArray(requiredValue) && commonTest.isArraysEqual(requiredValue, invokedValue))
-          // console.log('waitUntilCalled:argsList.every', {
+          // logger.info('waitUntilCalled:argsList.every', {
           //   invokedValueIndex,
           //   invokedValue,
           //   requiredValue,
@@ -180,9 +181,9 @@ async function waitUntilCalled<T extends {}, M extends jest.FunctionPropertyName
       return result
     })
     const matchingInvocationCount = matchingCalls?.length || 0
-    // console.info(`${logID}:waitUntilCalled`, {matchingCalls, matchingInvocationCount})
+    // logger.info(`${logID}:waitUntilCalled`, {matchingCalls, matchingInvocationCount})
     if (matchingInvocationCount >= times) {
-      console.log(`${logID}:waitUntilCalled`, {
+      logger.info(`${logID}:waitUntilCalled`, {
         'instanceSpyData.calls?.length': instanceSpyData.calls?.length,
         matchingInvocationCount,
         // matchingCalls: JSON.stringify(matchingCalls)

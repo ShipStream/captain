@@ -147,7 +147,9 @@ export class MateSocketServerManager {
     try {
       await closeGivenServer(this.io)
     } catch (e: any) {
-      logger.error('MateSocketServerManager:cleanUpForDeletion', e?.message || e)
+      if (e?.message !== 'Server is not running.') { // already cleaned up
+        logger.error('MateSocketServerManager:cleanUpForDeletion', e?.message || e)
+      }
     }
   }
 
@@ -174,7 +176,7 @@ export class MateSocketServerManager {
         appState.getSocketManager().broadcastMateDisconnected(payLoad)
       } else {
         // Case 'non-leader', send it to captain 'leader'
-        appState.getClientSocketManagerByRemoteUrl(appState.getLeaderUrl()!)!.sendMateDisconnected(payLoad)        
+        appState.getClientSocketManagerByRemoteUrl(appState.getLeaderUrl()!)?.sendMateDisconnected(payLoad)        
       }
     } catch (e) {
       logger.error(
