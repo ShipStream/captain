@@ -82,8 +82,7 @@ services:
   dns-server-template:
     hostname: dns-server
     image: technitium/dns-server:latest
-    ports:
-      - '5380:5380/tcp' #DNS web console (HTTP)
+    expose:
       - '53:53/udp' #DNS service
       - '53:53/tcp' #DNS service
     environment:

@@ -156,6 +156,8 @@ services:
       service: dns-server-template
     volumes:
       - technitium-config:/etc/dns
+    ports:
+      - '5380:5380/tcp' #DNS web console (HTTP)
     networks:
       custom-network:
         ipv4_address: 10.5.0.2
